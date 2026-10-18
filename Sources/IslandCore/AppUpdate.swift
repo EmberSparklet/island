@@ -94,20 +94,23 @@ public enum UpdateStatus: Equatable, Sendable {
         return false
     }
 
-    public var tabLabel: String { needsAttention ? "Updates 🔴" : "Updates" }
+    public var tabLabel: String {
+        needsAttention ? L10n.current.text(.updatesTabAttention) : L10n.current.text(.tabUpdates)
+    }
 
     public func summary(current: AppVersion) -> String {
+        let version = current.description
         switch self {
         case .checking:
-            return "Checking for updates…"
+            return L10n.current.text(.updateChecking)
         case .unknown:
-            return "Could not check for updates (you have \(current))."
+            return L10n.current.formatted(.updateFailed, version)
         case .upToDate:
-            return "island \(current) is up to date."
+            return L10n.current.formatted(.updateUpToDate, version)
         case .available(let latest):
-            return "island \(latest) is available — you have \(current)."
+            return L10n.current.formatted(.updateAvailableDetail, latest.description, version)
         case .development:
-            return "This is a development build (\(current)); install with Homebrew to get updates."
+            return L10n.current.formatted(.updateDevBuild, version)
         }
     }
 }
@@ -132,8 +135,8 @@ public enum UpgradeMethod: Equatable, Sendable {
 
     public func buttonTitle(for version: AppVersion) -> String {
         switch self {
-        case .brew: return "Upgrade to \(version) & Relaunch"
-        case .download: return "Download \(version)…"
+        case .brew: return L10n.current.formatted(.updateActionBrew, version.description)
+        case .download: return L10n.current.formatted(.updateActionDownload, version.description)
         }
     }
 

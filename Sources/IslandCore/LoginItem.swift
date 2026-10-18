@@ -24,12 +24,12 @@ public struct LoginItemMenuPresentation: Equatable, Sendable {
         case .requiresApproval:
             return LoginItemMenuPresentation(
                 isChecked: false,
-                hint: "allow island in System Settings → General → Login Items"
+                hint: L10n.current.text(.loginAllowHint)
             )
         case .notFound:
             return LoginItemMenuPresentation(
                 isChecked: false,
-                hint: "move Island.app to /Applications, then try again"
+                hint: L10n.current.text(.loginMoveHint)
             )
         }
     }

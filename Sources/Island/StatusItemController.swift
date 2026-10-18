@@ -100,6 +100,12 @@ final class StatusItemController {
         installButton()
     }
 
+    /// Redraws the button and menu, e.g. after the language changed.
+    func refresh() {
+        installButton()
+        rebuildMenu()
+    }
+
     /// The tasks the menu lists (same order as the overlay).
     func setTasks(_ entries: [AgentInbox.Entry]) {
         taskEntries = entries
@@ -114,19 +120,23 @@ final class StatusItemController {
         button.title = unreadCount > 0 ? " \(unreadCount)" : ""
         button.toolTip =
             hotkeyEnabled
-            ? "island — summon with \(hotkeyDisplay)"
-            : "island — hotkey switched off"
+            ? L10n.current.formatted(.tooltipSummon, hotkeyDisplay)
+            : L10n.current.text(.tooltipHotkeyOff)
     }
 
     private func rebuildMenu() {
         let menu = NSMenu()
+        // Read once: the whole menu is rebuilt on every language change too.
+        let localizer = L10n.current
 
         menu.addItem(
-            action("Summon overlay (\(hotkeyDisplay))", #selector(summon), keyEquivalent: "")
+            action(
+                localizer.formatted(.summonOverlayWith, hotkeyDisplay), #selector(summon),
+                keyEquivalent: "")
         )
         menu.addItem(
             action(
-                "Summon hotkey",
+                localizer.text(.summonHotkey),
                 #selector(toggleHotkey),
                 keyEquivalent: "",
                 isChecked: hotkeyEnabled
@@ -135,15 +145,16 @@ final class StatusItemController {
         menu.addItem(
             disabled(
                 hotkeyEnabled
-                    ? "hotkey \(hotkeyDisplay) · \(hotkeySourceNote)"
-                    : "hotkey off — the key is free for other apps"
+                    ? localizer.formatted(.hotkeyWithSource, hotkeyDisplay, hotkeySourceNote)
+                    : localizer.text(.hotkeyOffFree)
             )
         )
         menu.addItem(
             disabled(
                 popup.isEnabled
-                    ? "pops up for \(ResolvedConfiguration.secondsText(popup.seconds))s when a run finishes"
-                    : "pop-up off — the count still updates"))
+                    ? localizer.formatted(
+                        .popupOnFor, ResolvedConfiguration.secondsText(popup.seconds))
+                    : localizer.text(.popupOffCountStill)))
         menu.addItem(.separator())
 
         if !taskEntries.isEmpty {
@@ -162,26 +173,27 @@ final class StatusItemController {
             let item = action(automationHint, #selector(openAutomationSettings), keyEquivalent: "")
             item.image = NSImage(
                 systemSymbolName: "exclamationmark.triangle", accessibilityDescription: nil)
-            item.toolTip =
-                "island could only bring the app forward, not the exact tab. Turn island on for these apps in Privacy & Security → Automation."
+            item.toolTip = localizer.text(.automationLimited)
             menu.addItem(item)
             menu.addItem(.separator())
         }
 
         if let availableUpdate {
             let item = action(
-                "Update to \(availableUpdate) available…", #selector(openUpdates), keyEquivalent: ""
+                localizer.formatted(.updateAvailable, availableUpdate.description),
+                #selector(openUpdates), keyEquivalent: ""
             )
             item.image = Self.unreadDot()
             menu.addItem(item)
         }
-        menu.addItem(action("Settings…", #selector(openSettings), keyEquivalent: ","))
+        menu.addItem(
+            action(localizer.text(.openSettings), #selector(openSettings), keyEquivalent: ","))
         menu.addItem(.separator())
 
         let presentation = LoginItemMenuPresentation.make(for: loginItem.status)
         menu.addItem(
             action(
-                "Launch at login",
+                localizer.text(.launchAtLogin),
                 #selector(toggleLoginItem),
                 keyEquivalent: "",
                 isChecked: presentation.isChecked
@@ -191,11 +203,11 @@ final class StatusItemController {
             menu.addItem(disabled(hint))
         }
         if let lastError {
-            menu.addItem(disabled("last attempt failed: \(lastError)"))
+            menu.addItem(disabled(localizer.formatted(.lastAttemptFailed, lastError)))
         }
         menu.addItem(.separator())
 
-        menu.addItem(action("Quit island", #selector(quit), keyEquivalent: "q"))
+        menu.addItem(action(localizer.text(.quitIsland), #selector(quit), keyEquivalent: "q"))
 
         statusItem.menu = menu
     }
@@ -219,9 +231,9 @@ final class StatusItemController {
 
     private static func note(for source: HotkeySource) -> String {
         switch source {
-        case .menu: return "set in island"
-        case .environment: return "from ISLAND_HOTKEY"
-        case .builtInDefault: return "default"
+        case .menu: return L10n.current.text(.hotkeySourceMenu)
+        case .environment: return L10n.current.text(.hotkeySourceEnvironment)
+        case .builtInDefault: return L10n.current.text(.hotkeySourceDefault)
         }
     }
 

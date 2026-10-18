@@ -17,13 +17,15 @@ final class HotkeySettingsWindow: NSObject, NSTextFieldDelegate {
     private let onHotkeyChanged: (HotkeySpec, Bool) -> Void
     private let onThemeChanged: (OverlayTheme) -> Void
     private let themePicker = NSPopUpButton()
+    private let languagePicker = NSPopUpButton()
+    private let onLanguageChanged: (AppLanguage) -> Void
     private let onHintsChanged: (Bool) -> Void
     private let hintsToggle = NSButton(
-        checkboxWithTitle: "Show keyboard hints", target: nil, action: nil)
+        checkboxWithTitle: L10n.current.text(.showKeyboardHints), target: nil, action: nil)
     private let onPopupChanged: (PopupSettings) -> Void
     private var popup: PopupSettings
     private let popupToggle = NSButton(
-        checkboxWithTitle: "Pop up when an agent run finishes", target: nil, action: nil)
+        checkboxWithTitle: L10n.current.text(.popupOnFinish), target: nil, action: nil)
     private let popupSeconds = NSTextField(string: "")
     private let agentsView: AgentSettingsView
     private let updates: UpdateController
@@ -39,6 +41,7 @@ final class HotkeySettingsWindow: NSObject, NSTextFieldDelegate {
     init(
         coordinator: HotkeySettingsCoordinator,
         theme: OverlayTheme,
+        language: AppLanguage,
         showsHints: Bool,
         popup: PopupSettings,
         scenarios: AgentScenarioSettings,
@@ -46,18 +49,21 @@ final class HotkeySettingsWindow: NSObject, NSTextFieldDelegate {
         feedbackEnvironment: FeedbackEnvironment,
         onHotkeyChanged: @escaping (HotkeySpec, Bool) -> Void,
         onThemeChanged: @escaping (OverlayTheme) -> Void,
+        onLanguageChanged: @escaping (AppLanguage) -> Void,
         onHintsChanged: @escaping (Bool) -> Void,
         onPopupChanged: @escaping (PopupSettings) -> Void,
         onScenariosChanged: @escaping (AgentScenarioSettings) -> Void
     ) {
         self.popup = popup
         self.onPopupChanged = onPopupChanged
+        self.onLanguageChanged = onLanguageChanged
         self.onHintsChanged = onHintsChanged
         self.coordinator = coordinator
         self.onHotkeyChanged = onHotkeyChanged
         self.onThemeChanged = onThemeChanged
         recorder = HotkeyRecorderView()
-        enabledToggle = NSButton(checkboxWithTitle: "Enabled", target: nil, action: nil)
+        enabledToggle = NSButton(
+            checkboxWithTitle: L10n.current.text(.enabled), target: nil, action: nil)
         feedback = NSTextField(labelWithString: "")
         agentsView = AgentSettingsView(settings: scenarios, onChange: onScenariosChanged)
         self.updates = updates
@@ -71,7 +77,7 @@ final class HotkeySettingsWindow: NSObject, NSTextFieldDelegate {
         )
         super.init()
 
-        window.title = "island settings"
+        window.title = L10n.current.text(.settingsTitle)
         window.isReleasedWhenClosed = false
         window.contentView = makeContentView()
 
@@ -90,6 +96,10 @@ final class HotkeySettingsWindow: NSObject, NSTextFieldDelegate {
         themePicker.selectItem(at: OverlayTheme.allCases.firstIndex(of: theme) ?? 0)
         themePicker.target = self
         themePicker.action = #selector(themePicked)
+        languagePicker.addItems(withTitles: AppLanguage.allCases.map(\.label))
+        languagePicker.selectItem(at: AppLanguage.allCases.firstIndex(of: language) ?? 0)
+        languagePicker.target = self
+        languagePicker.action = #selector(languagePicked)
         hintsToggle.state = showsHints ? .on : .off
         hintsToggle.target = self
         hintsToggle.action = #selector(hintsToggled)
@@ -113,25 +123,34 @@ final class HotkeySettingsWindow: NSObject, NSTextFieldDelegate {
         window.makeFirstResponder(nil)
     }
 
+    /// The delegate rebuilds this object on a language change and puts the
+    /// window back exactly as it found it.
+    var isVisible: Bool { window.isVisible }
+
+    func close() {
+        window.close()
+    }
+
     // MARK: - Layout
 
     private func makeContentView() -> NSView {
         tabs.translatesAutoresizingMaskIntoConstraints = false
-        for (title, view) in [
-            ("General", pane(generalSection())),
-            ("Appearance", pane(appearanceSection())),
-            ("Notifications", pane(notificationSection())),
-            ("Agents", agentsView as NSView),
+        // Identifiers stay English: `show(tab:)` matches on them.
+        for (id, label, view) in [
+            ("General", L10n.current.text(.tabGeneral), pane(generalSection())),
+            ("Appearance", L10n.current.text(.tabAppearance), pane(appearanceSection())),
+            ("Notifications", L10n.current.text(.tabNotifications), pane(notificationSection())),
+            ("Agents", L10n.current.text(.tabAgents), agentsView as NSView),
         ] {
-            let item = NSTabViewItem(identifier: title)
-            item.label = title
+            let item = NSTabViewItem(identifier: id)
+            item.label = label
             item.view = view
             tabs.addTabViewItem(item)
         }
         updatesTab.view = updatesView
         tabs.addTabViewItem(updatesTab)
         let feedbackTab = NSTabViewItem(identifier: "Feedback")
-        feedbackTab.label = "Feedback"
+        feedbackTab.label = L10n.current.text(.tabFeedback)
         feedbackTab.view = feedbackView
         tabs.addTabViewItem(feedbackTab)
         updateStatusChanged()
@@ -164,21 +183,25 @@ final class HotkeySettingsWindow: NSObject, NSTextFieldDelegate {
     }
 
     private func generalSection() -> NSStackView {
-        let title = label("Summon hotkey", font: .systemFont(ofSize: 13, weight: .semibold))
+        let localizer = L10n.current
+        let title = label(
+            localizer.text(.summonHotkeyTitle), font: .systemFont(ofSize: 13, weight: .semibold))
         recorder.translatesAutoresizingMaskIntoConstraints = false
 
         let help = label(
-            "Click to record, then press ⌘⌃⌥⇧ + a key. Esc cancels.",
+            localizer.text(.recordHelp),
             font: .systemFont(ofSize: 11),
             color: .secondaryLabelColor
         )
         feedback.font = .systemFont(ofSize: 11)
         feedback.translatesAutoresizingMaskIntoConstraints = false
 
-        let clear = NSButton(title: "Clear", target: self, action: #selector(clearTapped))
+        let clear = NSButton(
+            title: localizer.text(.clearButton), target: self, action: #selector(clearTapped))
         let reset = NSButton(
-            title: "Reset to default", target: self, action: #selector(resetTapped))
-        let apply = NSButton(title: "Apply", target: self, action: #selector(applyTapped))
+            title: localizer.text(.resetToDefault), target: self, action: #selector(resetTapped))
+        let apply = NSButton(
+            title: localizer.text(.applyButton), target: self, action: #selector(applyTapped))
         apply.keyEquivalent = "\r"
         let buttons = NSStackView(views: [clear, reset, apply])
         buttons.orientation = .horizontal
@@ -193,29 +216,43 @@ final class HotkeySettingsWindow: NSObject, NSTextFieldDelegate {
     }
 
     private func appearanceSection() -> NSStackView {
-        let themeTitle = label("Overlay theme", font: .systemFont(ofSize: 13, weight: .semibold))
+        let localizer = L10n.current
+        let themeTitle = label(
+            localizer.text(.overlayThemeTitle), font: .systemFont(ofSize: 13, weight: .semibold))
         let themeHelp = label(
-            "Applies immediately; the overlay shows a preview.",
+            localizer.text(.themeHelp),
             font: .systemFont(ofSize: 11),
             color: .secondaryLabelColor
         )
-        let stack = NSStackView(views: [themeTitle, themePicker, themeHelp, hintsToggle])
+        let languageTitle = label(
+            localizer.text(.languageTitle), font: .systemFont(ofSize: 13, weight: .semibold))
+        let languageHelp = label(
+            localizer.text(.languageHelp),
+            font: .systemFont(ofSize: 11),
+            color: .secondaryLabelColor
+        )
+        let stack = NSStackView(views: [
+            themeTitle, themePicker, themeHelp, hintsToggle, languageTitle, languagePicker,
+            languageHelp,
+        ])
         stack.setCustomSpacing(20, after: themeHelp)
         return stack
     }
 
     private func notificationSection() -> NSStackView {
-        let popupTitle = label("Pop-up", font: .systemFont(ofSize: 13, weight: .semibold))
+        let localizer = L10n.current
+        let popupTitle = label(
+            localizer.text(.popupTitle), font: .systemFont(ofSize: 13, weight: .semibold))
         popupSeconds.alignment = .right
         popupSeconds.widthAnchor.constraint(equalToConstant: 56).isActive = true
         let secondsRow = NSStackView(views: [
-            label("Stay on screen for", font: .systemFont(ofSize: 13)), popupSeconds,
-            label("seconds", font: .systemFont(ofSize: 13)),
+            label(localizer.text(.stayOnScreenFor), font: .systemFont(ofSize: 13)), popupSeconds,
+            label(localizer.text(.secondsUnit), font: .systemFont(ofSize: 13)),
         ])
         secondsRow.orientation = .horizontal
         secondsRow.spacing = 6
         let popupHelp = label(
-            "Hovering the pop-up keeps it open. The menu bar counts unread runs either way;\nruns you watched finish are listed without a dot or a pop-up.",
+            localizer.text(.popupHelp),
             font: .systemFont(ofSize: 11),
             color: .secondaryLabelColor
         )
@@ -243,10 +280,11 @@ final class HotkeySettingsWindow: NSObject, NSTextFieldDelegate {
         enabledToggle.state = coordinator.isEnabled ? .on : .off
         if coordinator.isEnabled {
             feedback.textColor = .secondaryLabelColor
-            feedback.stringValue = "active: \(coordinator.current.displayString)"
+            feedback.stringValue = L10n.current.formatted(
+                .hintActive, coordinator.current.displayString)
         } else {
             feedback.textColor = .secondaryLabelColor
-            feedback.stringValue = "hotkey is off — Apply a combination to switch it back on"
+            feedback.stringValue = L10n.current.text(.hintHotkeyOffApply)
         }
     }
 
@@ -281,16 +319,16 @@ final class HotkeySettingsWindow: NSObject, NSTextFieldDelegate {
 
     private func recorderDidRecord(_ spec: HotkeySpec) {
         feedback.textColor = .secondaryLabelColor
-        feedback.stringValue = "press Apply to bind \(spec.displayString)"
+        feedback.stringValue = L10n.current.formatted(.hintPressApply, spec.displayString)
     }
 
     private func recorderDidReject() {
-        showFailure("needs a key plus at least one modifier, e.g. ⌃⌘,")
+        showFailure(L10n.current.text(.failNeedsModifier))
     }
 
     @objc private func applyTapped() {
         guard let spec = recorder.spec else {
-            showFailure("press a key combination first, or use Clear to switch the hotkey off")
+            showFailure(L10n.current.text(.failPressComboFirst))
             return
         }
 
@@ -300,7 +338,9 @@ final class HotkeySettingsWindow: NSObject, NSTextFieldDelegate {
         case .invalidText(let error):
             showFailure(describe(error))
         case .registrationFailed(let reason):
-            showFailure("macOS refused it (\(reason)); kept \(coordinator.current.displayString)")
+            showFailure(
+                L10n.current.formatted(
+                    .failRefusedKept, reason, coordinator.current.displayString))
         case .applied(let applied):
             if coordinator.isEnabled {
                 reportSuccess(applied)
@@ -315,7 +355,7 @@ final class HotkeySettingsWindow: NSObject, NSTextFieldDelegate {
         case .enabled:
             reportSuccess(spec)
         case .registrationFailed(let reason):
-            showFailure("macOS refused it (\(reason)); the hotkey stays off")
+            showFailure(L10n.current.formatted(.failRefusedStaysOff, reason))
             refreshFromCoordinator()
         case .disabled:
             break
@@ -329,7 +369,7 @@ final class HotkeySettingsWindow: NSObject, NSTextFieldDelegate {
         recorder.setSpec(nil)
         enabledToggle.state = .off
         feedback.textColor = .secondaryLabelColor
-        feedback.stringValue = "hotkey switched off; the key is free for other apps"
+        feedback.stringValue = L10n.current.text(.hintSwitchedOffFree)
         onHotkeyChanged(coordinator.current, false)
     }
 
@@ -349,6 +389,13 @@ final class HotkeySettingsWindow: NSObject, NSTextFieldDelegate {
         onThemeChanged(OverlayTheme.allCases[index])
     }
 
+    /// The whole window is rebuilt by the app delegate, so this only reports.
+    @objc private func languagePicked() {
+        let index = languagePicker.indexOfSelectedItem
+        guard AppLanguage.allCases.indices.contains(index) else { return }
+        onLanguageChanged(AppLanguage.allCases[index])
+    }
+
     @objc private func enabledToggled() {
         let shouldEnable = enabledToggle.state == .on
         switch coordinator.setEnabled(shouldEnable) {
@@ -356,10 +403,10 @@ final class HotkeySettingsWindow: NSObject, NSTextFieldDelegate {
             reportSuccess(spec)
         case .disabled:
             feedback.textColor = .secondaryLabelColor
-            feedback.stringValue = "hotkey switched off"
+            feedback.stringValue = L10n.current.text(.hintSwitchedOff)
             onHotkeyChanged(coordinator.current, false)
         case .registrationFailed(let reason):
-            showFailure("macOS refused it (\(reason)); the hotkey stays off")
+            showFailure(L10n.current.formatted(.failRefusedStaysOff, reason))
             refreshFromCoordinator()
         }
     }
@@ -368,7 +415,7 @@ final class HotkeySettingsWindow: NSObject, NSTextFieldDelegate {
         recorder.setSpec(spec)
         enabledToggle.state = .on
         feedback.textColor = .secondaryLabelColor
-        feedback.stringValue = "saved: \(spec.displayString) — already active"
+        feedback.stringValue = L10n.current.formatted(.hintSaved, spec.displayString)
         onHotkeyChanged(spec, true)
     }
 
@@ -379,10 +426,11 @@ final class HotkeySettingsWindow: NSObject, NSTextFieldDelegate {
 
     private func describe(_ error: HotkeySpecError) -> String {
         switch error {
-        case .empty: return "press a key combination first"
-        case .missingModifier: return "needs at least one modifier, e.g. ⌃⌘,"
-        case .unknownModifier(let name): return "unknown modifier \"\(name)\""
-        case .unknownKey(let name): return "unknown key \"\(name)\""
+        case .empty: return L10n.current.text(.errorEmpty)
+        case .missingModifier: return L10n.current.text(.errorMissingModifier)
+        case .unknownModifier(let name):
+            return L10n.current.formatted(.errorUnknownModifier, name)
+        case .unknownKey(let name): return L10n.current.formatted(.errorUnknownKey, name)
         }
     }
 }

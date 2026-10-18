@@ -19,11 +19,10 @@ final class FeedbackSettingsView: NSView {
     required init?(coder: NSCoder) { nil }
 
     private func build() {
-        let title = NSTextField(labelWithString: "Send feedback")
+        let title = NSTextField(labelWithString: L10n.current.text(.sendFeedback))
         title.font = .systemFont(ofSize: 13, weight: .semibold)
         let help = NSTextField(
-            labelWithString:
-                "A bug, an idea, anything. Your island and macOS versions are added for you.")
+            labelWithString: L10n.current.text(.feedbackIntro))
         help.font = .systemFont(ofSize: 11)
         help.textColor = .secondaryLabelColor
 
@@ -38,12 +37,15 @@ final class FeedbackSettingsView: NSView {
         scroll.borderType = .bezelBorder
         scroll.translatesAutoresizingMaskIntoConstraints = false
 
-        let mail = NSButton(title: "Send Email", target: self, action: #selector(mailTapped))
+        let mail = NSButton(
+            title: L10n.current.text(.sendEmail), target: self, action: #selector(mailTapped))
         mail.keyEquivalent = "\r"
         mail.keyEquivalentModifierMask = [.command]
         let issue = NSButton(
-            title: "Open GitHub Issue", target: self, action: #selector(issueTapped))
-        let copy = NSButton(title: "Copy", target: self, action: #selector(copyTapped))
+            title: L10n.current.text(.openGitHubIssue), target: self, action: #selector(issueTapped)
+        )
+        let copy = NSButton(
+            title: L10n.current.text(.copyButton), target: self, action: #selector(copyTapped))
         let buttons = NSStackView(views: [mail, issue, copy])
         buttons.orientation = .horizontal
         buttons.spacing = 8
@@ -67,7 +69,7 @@ final class FeedbackSettingsView: NSView {
 
     private var report: FeedbackReport? {
         let report = FeedbackReport(message: textView.string, environment: environment)
-        if report == nil { show("Write something first.", isError: true) }
+        if report == nil { show(L10n.current.text(.feedbackEmpty), isError: true) }
         return report
     }
 
@@ -76,27 +78,27 @@ final class FeedbackSettingsView: NSView {
         guard let url = report.mailURL, NSWorkspace.shared.open(url) else {
             copy(report)
             show(
-                "No mail app answered; copied instead — paste it into a mail to \(FeedbackReport.address).",
+                L10n.current.formatted(.feedbackNoMailApp, FeedbackReport.address),
                 isError: true)
             return
         }
-        show("Opened in your mail app — press Send there. Thank you!", isError: false)
+        show(L10n.current.text(.feedbackMailOpened), isError: false)
     }
 
     @objc private func issueTapped() {
         guard let report else { return }
         guard let url = report.issueURL, NSWorkspace.shared.open(url) else {
             copy(report)
-            show("Could not open the browser; copied instead.", isError: true)
+            show(L10n.current.text(.feedbackNoBrowser), isError: true)
             return
         }
-        show("Opened on GitHub — submit it there. Thank you!", isError: false)
+        show(L10n.current.text(.feedbackGitHubOpened), isError: false)
     }
 
     @objc private func copyTapped() {
         guard let report else { return }
         copy(report)
-        show("Copied — paste it into a mail to \(FeedbackReport.address).", isError: false)
+        show(L10n.current.formatted(.feedbackCopied, FeedbackReport.address), isError: false)
     }
 
     private func copy(_ report: FeedbackReport) {

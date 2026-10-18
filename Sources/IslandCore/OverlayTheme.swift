@@ -64,11 +64,11 @@ public enum OverlayTheme: String, CaseIterable, Sendable {
 
     public var displayName: String {
         switch self {
-        case .system: return "System"
-        case .lagoon: return "Lagoon"
-        case .coral: return "Coral"
-        case .sand: return "Sand"
-        case .midnight: return "Midnight"
+        case .system: return L10n.current.text(.themeSystem)
+        case .lagoon: return L10n.current.text(.themeLagoon)
+        case .coral: return L10n.current.text(.themeCoral)
+        case .sand: return L10n.current.text(.themeSand)
+        case .midnight: return L10n.current.text(.themeMidnight)
         }
     }
 
@@ -158,7 +158,7 @@ public struct UserDefaultsOverlayStore {
 /// The header's status text, which replaces the old `island` label.
 public enum OverlayStatus {
     public static func text(unread: Int) -> String {
-        unread > 0 ? "\(unread) new" : "All caught up"
+        unread > 0 ? L10n.current.formatted(.newCount, unread) : L10n.current.text(.allCaughtUp)
     }
 }
 

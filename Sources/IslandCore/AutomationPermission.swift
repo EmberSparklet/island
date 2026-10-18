@@ -56,6 +56,7 @@ public struct AutomationDenials: Equatable, Sendable {
     }
 
     public var menuTitle: String? {
-        appNames.isEmpty ? nil : "Allow island to control \(appNames.joined(separator: ", "))…"
+        guard !appNames.isEmpty else { return nil }
+        return L10n.current.formatted(.automationMenuTitle, appNames.joined(separator: ", "))
     }
 }

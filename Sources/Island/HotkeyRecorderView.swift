@@ -51,13 +51,13 @@ final class HotkeyRecorderView: NSView {
         let text: String
         let color: NSColor
         if isRecording {
-            text = "Press a combination…"
+            text = L10n.current.text(.pressCombination)
             color = .secondaryLabelColor
         } else if let spec {
             text = spec.displayString
             color = .labelColor
         } else {
-            text = "None"
+            text = L10n.current.text(.recorderNone)
             color = .secondaryLabelColor
         }
         let attributes: [NSAttributedString.Key: Any] = [

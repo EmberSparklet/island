@@ -35,7 +35,7 @@ final class AgentSettingsView: NSView {
         stack.translatesAutoresizingMaskIntoConstraints = false
 
         let intro = Self.label(
-            "island only watches what is switched on. Runs switched off are neither counted\nnor listed (island --scan-agents still shows them, marked off).",
+            L10n.current.text(.agentsFootnote),
             size: 11, color: .secondaryLabelColor)
         stack.addArrangedSubview(intro)
         stack.setCustomSpacing(14, after: intro)
@@ -92,7 +92,9 @@ final class AgentSettingsView: NSView {
 
         let details = NSStackView(views: [
             Self.label(scenario.detection, size: 11, color: .secondaryLabelColor),
-            Self.label("Click: \(scenario.jumpBack)", size: 11, color: .tertiaryLabelColor),
+            Self.label(
+                L10n.current.formatted(.clickAction, scenario.jumpBack), size: 11,
+                color: .tertiaryLabelColor),
         ])
         details.orientation = .vertical
         details.alignment = .leading

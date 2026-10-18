@@ -11,57 +11,42 @@ public struct AgentScenario: Equatable, Hashable, Sendable, Identifiable {
     /// `<agent raw value>.<scenario>`; persisted, so never rename one.
     public let id: String
     public let agent: AgentKind
-    public let title: String
-    /// Which runs fall into this scenario and how island sees them finish.
-    public let detection: String
-    /// What clicking such a run does.
-    public let jumpBack: String
+
+    public init(id: String, agent: AgentKind) {
+        self.id = id
+        self.agent = agent
+    }
 
     public static func named(_ id: String) -> AgentScenario? {
         AgentProfile.all.lazy.flatMap(\.scenarios).first { $0.id == id }
     }
+
+    /// The support-matrix copy shown in Settings → Agents. Looked up on every
+    /// read, which is what lets a language switch show up there.
+    public var title: String { text?.title ?? id }
+    public var detection: String { text?.detection ?? "" }
+    public var jumpBack: String { text?.jumpBack ?? "" }
+
+    private var text: ScenarioText? { L10n.current.scenario(id) }
 }
 
 extension AgentScenario {
     public static let claudeCodeTerminal = AgentScenario(
-        id: "claude-code.terminal", agent: .claudeCode, title: "Terminal CLI",
-        detection: "claude in tmux, cmux, Ghostty, Terminal, iTerm2 or VS Code's terminal",
-        jumpBack: "Focuses the exact tab or tmux pane; else copies claude --resume")
-    public static let claudeCodeEditor = AgentScenario(
-        id: "claude-code.editor", agent: .claudeCode, title: "Editor extension",
-        detection: "Claude Code panels inside VS Code or JetBrains IDEs",
-        jumpBack: "Brings the editor window forward")
+        id: "claude-code.terminal", agent: .claudeCode)
+    public static let claudeCodeEditor = AgentScenario(id: "claude-code.editor", agent: .claudeCode)
     public static let claudeCodeDesktop = AgentScenario(
-        id: "claude-code.desktop", agent: .claudeCode, title: "Code in the Claude app",
-        detection: "Claude Code sessions started from the Claude desktop app",
-        jumpBack: "Brings the Claude app forward")
+        id: "claude-code.desktop", agent: .claudeCode)
     public static let claudeCodeHeadless = AgentScenario(
-        id: "claude-code.headless", agent: .claudeCode, title: "SDK & other entry points",
-        detection: "Agent SDK and any entry point island does not know yet",
-        jumpBack: "Brings its host app forward; else copies claude --resume")
+        id: "claude-code.headless", agent: .claudeCode)
 
     public static let claudeDesktopChat = AgentScenario(
-        id: "claude-desktop.chat", agent: .claudeDesktop, title: "Chats",
-        detection: "Replies in conversations the Claude app has open (its local cache)",
-        jumpBack: "Opens the conversation (claude:// link)")
+        id: "claude-desktop.chat", agent: .claudeDesktop)
 
-    public static let piTerminal = AgentScenario(
-        id: "pi.terminal", agent: .pi, title: "Terminal CLI",
-        detection: "pi in any terminal, matched to its process by working directory",
-        jumpBack: "Focuses the exact tab or tmux pane; else copies pi --session")
+    public static let piTerminal = AgentScenario(id: "pi.terminal", agent: .pi)
 
-    public static let codexApp = AgentScenario(
-        id: "codex.app", agent: .codex, title: "Desktop app & IDE",
-        detection: "Threads from the Codex (ChatGPT) app and the VS Code extension",
-        jumpBack: "Opens the thread (codex:// link)")
-    public static let codexCLI = AgentScenario(
-        id: "codex.cli", agent: .codex, title: "Terminal CLI",
-        detection: "The codex TUI in a terminal",
-        jumpBack: "Opens the thread in the Codex app (codex:// link)")
-    public static let codexExec = AgentScenario(
-        id: "codex.exec", agent: .codex, title: "Headless exec",
-        detection: "codex exec runs from scripts or CI",
-        jumpBack: "Opens the thread in the Codex app (codex:// link)")
+    public static let codexApp = AgentScenario(id: "codex.app", agent: .codex)
+    public static let codexCLI = AgentScenario(id: "codex.cli", agent: .codex)
+    public static let codexExec = AgentScenario(id: "codex.exec", agent: .codex)
 }
 
 /// Everything that differs from one agent to the next, in one declarative

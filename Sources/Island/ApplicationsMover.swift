@@ -30,8 +30,7 @@ enum ApplicationsMover {
         } catch {
             log("move to Applications failed: \(error.localizedDescription)")
             let failure = NSAlert(error: error)
-            failure.informativeText =
-                "Drag Island into the Applications folder in Finder, then open it from there."
+            failure.informativeText = L10n.current.text(.moveDragHint)
             failure.runModal()
             return false
         }

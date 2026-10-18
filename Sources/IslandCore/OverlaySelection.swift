@@ -81,10 +81,10 @@ public enum ShortAge {
     public static func text(since date: Date, now: Date = Date()) -> String {
         let seconds = max(0, Int(now.timeIntervalSince(date)))
         switch seconds {
-        case ..<60: return "now"
-        case ..<3600: return "\(seconds / 60)m"
-        case ..<86400: return "\(seconds / 3600)h"
-        default: return "\(seconds / 86400)d"
+        case ..<60: return L10n.current.text(.ageNow)
+        case ..<3600: return L10n.current.formatted(.ageMinutes, seconds / 60)
+        case ..<86400: return L10n.current.formatted(.ageHours, seconds / 3600)
+        default: return L10n.current.formatted(.ageDays, seconds / 86400)
         }
     }
 }

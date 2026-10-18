@@ -133,7 +133,9 @@ final class OverlayContentView: NSView, NSTextFieldDelegate {
     }
 
     private func addEmptyRow() {
-        let text = selection.query.isEmpty ? "Nothing has finished yet" : "No matches"
+        let text =
+            selection.query.isEmpty
+            ? L10n.current.text(.nothingFinished) : L10n.current.text(.noMatches)
         let label = NSTextField(labelWithString: text)
         label.font = .systemFont(ofSize: 13)
         label.textColor = NSColor(palette.muted)
@@ -181,9 +183,14 @@ final class OverlayContentView: NSView, NSTextFieldDelegate {
             text: text, textColor: NSColor(palette.accent),
             background: NSColor(palette.selectionBackground), fontSize: 11)
         let count = selection.rows.count
+        let placeholder: String
+        switch count {
+        case 0: placeholder = L10n.current.text(.searchTasks)
+        case 1: placeholder = L10n.current.text(.searchOneTask)
+        default: placeholder = L10n.current.formatted(.searchManyTasks, count)
+        }
         searchField.placeholderAttributedString = NSAttributedString(
-            string: count == 0
-                ? "Search tasks" : count == 1 ? "Search 1 task" : "Search \(count) tasks",
+            string: placeholder,
             attributes: [
                 .foregroundColor: NSColor(palette.muted),
                 .font: NSFont.systemFont(ofSize: 15),
@@ -192,7 +199,7 @@ final class OverlayContentView: NSView, NSTextFieldDelegate {
         footerBox.isHidden = !showsFooter
         footerHeightConstraint?.constant = showsFooter ? Self.footerHeight : 0
         bottomInsetConstraint?.constant = -(showsFooter ? Self.footerInset : Self.padding)
-        footer.stringValue = "↑↓ move   ↩ open   ⌘1–9 jump   ⌘, settings   esc close"
+        footer.stringValue = L10n.current.text(.overlayHints)
     }
 
     private func applyPalette() {

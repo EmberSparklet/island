@@ -191,7 +191,8 @@ swift build                  # SwiftPM 自身拒绝 cyclic target dependency
 - 所有行为开关走环境变量（`ISLAND_*`），不引入配置文件——POC 阶段要的是"改一个数就能重验"
 - **agent 检测分两层**：`IslandCore` 只做纯解析（`AgentActivitySource.completedTasks()` 吃 URL、只读文件，不碰 AppKit）；`Sources/Island/AgentMonitor.swift` 负责定时轮询。**每个 agent 的差异只放两处**：声明式的 `AgentProfile`（名称、`ps` 进程名、图标、`scenarios`）和检测用的 `AgentActivitySource`（给每个 task 打上 `scenario`）。不要再在别处 `switch AgentKind`。新增一个 agent = `AgentKind` 加 case + `profile` 里加一项（至少一个 `AgentScenario`）+ 一个 source 并在 `AgentActivityScanner.standard(home:)` 注册，UI（含 Settings → Agents）不用动；新增场景 = 加一个 `AgentScenario` 静态值、放进 profile、让 source 按落盘字段归类
 - Swift 源码 4 空格缩进，格式由 `.swift-format` 定义；`swift-format` 随 Xcode 提供，不额外安装
-- comment / docstring / log 一律英文（见 AGENTS.md § Comments）；菜单项等 UI 字符串同样用英文，保持代码内单一语言
+- comment / docstring / log / error message 一律英文（见 AGENTS.md § Comments）；**界面文案不再内联**，一律走 `IslandCore` 的本地化表：新增文案 = `TextKey` 加一个 case + `englishTexts` 与 `chineseTexts` 各写一条，读取用 `L10n.current.text(_:)` / `formatted(_:_:)`（`%d` / `%@` 模板）。`LocalizationTests` 强制两表 key 集合一致、占位符顺序一致；`AgentScenario` 的 `title` / `detection` / `jumpBack` 走 `englishScenarios` / `chineseScenarios`，按 scenario id 取
+- 当前语言是进程级的 `L10n.current`：`IslandCore` 里默认英文（测试与 CLI 输出因此确定），App 启动时按 `UserDefaultsLanguageStore` 切一次。设置里改语言后 `AppDelegate.setLanguage` 会重建设置窗口并刷新菜单与悬浮窗——所以新写的 UI 文案不要烘进 `init`，除非该部件确实会随之重建
 - 新增 `Sources/Island/` 下的文件后，记得把路径加进 `coverage.config`，否则覆盖率基线（100）会掉
 
 ## Gotchas

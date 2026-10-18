@@ -19,6 +19,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var automationDenials = AutomationDenials()
     private let overlayStore = UserDefaultsOverlayStore()
     private let popupStore = UserDefaultsPopupStore()
+    private let languageStore = UserDefaultsLanguageStore()
     private let scenarioStore = UserDefaultsAgentScenarioStore()
     /// Which agent scenarios island watches (Settings → Agents).
     private var scenarios: AgentScenarioSettings
@@ -38,6 +39,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Before anything draws: settle the language every view will read.
+        L10n.use(languageStore.load())
         reportConfiguration()
         // Before registering anything: a copy in /Applications takes over.
         if ApplicationsMover.offerIfNeeded(log: { [weak self] in self?.log($0) }) {
@@ -107,27 +110,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             )
         }
 
-        let settingsWindow = HotkeySettingsWindow(
-            coordinator: settings,
-            theme: content.theme,
-            showsHints: content.showsHints,
-            popup: popup,
-            scenarios: scenarios,
-            updates: updates,
-            feedbackEnvironment: FeedbackEnvironment(
-                appVersion: updates.current.description,
-                osVersion: Self.osVersion),
-            onHotkeyChanged: { [weak self] spec, enabled in
-                self?.log("hotkey changed to \(spec.displayString) (enabled: \(enabled))")
-                self?.statusItem?.setHotkey(spec, source: .menu)
-                self?.statusItem?.setHotkeyEnabled(enabled)
-            },
-            onThemeChanged: { [weak self] theme in self?.setTheme(theme) },
-            onHintsChanged: { [weak self] shows in self?.setShowsHints(shows) },
-            onPopupChanged: { [weak self] popup in self?.setPopup(popup) },
-            onScenariosChanged: { [weak self] scenarios in self?.setScenarios(scenarios) }
-        )
-        self.settingsWindow = settingsWindow
+        settingsWindow = makeSettingsWindow(
+            coordinator: settings, theme: content.theme, showsHints: content.showsHints)
 
         statusItem = StatusItemController(
             hotkey: settings.current,
@@ -282,6 +266,54 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             log("overlay shown, hiding in \(ResolvedConfiguration.secondsText(popup.seconds))s")
             scheduleHide()
         }
+    }
+
+    /// Built at launch and rebuilt on a language change, because every label
+    /// inside it is written once, at construction time.
+    private func makeSettingsWindow(
+        coordinator: HotkeySettingsCoordinator, theme: OverlayTheme, showsHints: Bool
+    ) -> HotkeySettingsWindow {
+        HotkeySettingsWindow(
+            coordinator: coordinator,
+            theme: theme,
+            language: languageStore.load(),
+            showsHints: showsHints,
+            popup: popup,
+            scenarios: scenarios,
+            updates: updates,
+            feedbackEnvironment: FeedbackEnvironment(
+                appVersion: updates.current.description,
+                osVersion: Self.osVersion),
+            onHotkeyChanged: { [weak self] spec, enabled in
+                self?.log("hotkey changed to \(spec.displayString) (enabled: \(enabled))")
+                self?.statusItem?.setHotkey(spec, source: .menu)
+                self?.statusItem?.setHotkeyEnabled(enabled)
+            },
+            onThemeChanged: { [weak self] theme in self?.setTheme(theme) },
+            onLanguageChanged: { [weak self] language in self?.setLanguage(language) },
+            onHintsChanged: { [weak self] shows in self?.setShowsHints(shows) },
+            onPopupChanged: { [weak self] popup in self?.setPopup(popup) },
+            onScenariosChanged: { [weak self] scenarios in self?.setScenarios(scenarios) }
+        )
+    }
+
+    /// Settings picked a language: remember it, then rebuild the two surfaces
+    /// whose strings were baked in. The overlay re-reads its texts on render,
+    /// so refreshing the inbox is enough for it.
+    private func setLanguage(_ language: AppLanguage) {
+        languageStore.save(language)
+        L10n.use(language)
+        let wasOpen = settingsWindow?.isVisible == true
+        settingsWindow?.close()
+        if let settings, let content = overlayContent {
+            let rebuilt = makeSettingsWindow(
+                coordinator: settings, theme: content.theme, showsHints: content.showsHints)
+            settingsWindow = rebuilt
+            if wasOpen { rebuilt.show() }
+        }
+        statusItem?.refresh()
+        refreshAgentUI()
+        log("language: \(language.rawValue)")
     }
 
     /// Settings picked a new theme: apply, remember, and show a preview.

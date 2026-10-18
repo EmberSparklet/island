@@ -27,6 +27,7 @@
 - `Settings…` → `Feedback`：写几句话，用邮件发出、打开预填好的 GitHub issue，或者复制下来；会自动附上 island 与 macOS 版本
 - `Settings…` → `Agents` 列出 island 支持的每个 agent 及其场景（如 Claude Code 的终端 CLI / 编辑器扩展 / Claude app 内 / SDK，Codex 的桌面 app / 终端 CLI / `codex exec`），写明怎么检测、点击后会怎样；每个场景、每个 agent 都可以单独关掉，关掉的场景不计数、不弹出、不进列表
 - `Settings…` → `Appearance` 里可以关掉底部的键盘提示（`Show keyboard hints`）；可选主题：System（浅色 Sand / 深色 Lagoon）/ Lagoon / Coral / Sand / Midnight，立即生效
+- **界面中英双语**：默认跟随系统语言，也可以在 `Settings…` → `Appearance` 的 `Language` 里固定为中文或 `English`。切换后菜单栏与悬浮窗立即更新，设置窗口重开一次即变；本文其余部分沿用英文界面的名称
 - 悬浮窗不会出现在窗口切换器里
 - 菜单栏常驻一个 island 图标：一眼看出它在跑，可手动召唤、开关召唤快捷键、改快捷键、切换开机自启、退出
 - 快捷键可以随时 on / off：关掉后键位还给系统，配置仍然保留，随时可以再打开

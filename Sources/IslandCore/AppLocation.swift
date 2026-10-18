@@ -33,8 +33,9 @@ public enum MoveToApplications {
         public let informativeText: String
     }
 
-    public static let moveButton = "Move to Applications"
-    public static let laterButton = "Not Now"
+    // Computed, not stored: the language can change while island runs.
+    public static var moveButton: String { L10n.current.text(.moveToApplications) }
+    public static var laterButton: String { L10n.current.text(.notNow) }
 
     public static func destination(forBundlePath bundlePath: String) -> String {
         "/Applications/" + URL(fileURLWithPath: bundlePath).lastPathComponent
@@ -46,15 +47,13 @@ public enum MoveToApplications {
         case .installed:
             return nil
         case .translocated:
-            why =
-                "macOS is running island from a temporary, read-only copy because it was not moved into Applications."
+            why = L10n.current.text(.moveWhyTranslocated)
         case .diskImage:
-            why = "island is running from the disk image, which goes away once it is ejected."
+            why = L10n.current.text(.moveWhyDiskImage)
         }
         return Prompt(
-            message: "Move island to your Applications folder?",
-            informativeText: why
-                + " Launch at login only works from Applications. island can copy itself there and reopen."
+            message: L10n.current.text(.movePromptMessage),
+            informativeText: why + L10n.current.text(.movePromptSuffix)
         )
     }
 

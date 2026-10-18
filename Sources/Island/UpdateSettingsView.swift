@@ -9,9 +9,10 @@ final class UpdateSettingsView: NSView {
     private let updates: UpdateController
     private let summary = NSTextField(labelWithString: "")
     private let upgradeButton = NSButton(title: "", target: nil, action: nil)
-    private let checkButton = NSButton(title: "Check Now", target: nil, action: nil)
+    private let checkButton = NSButton(
+        title: L10n.current.text(.checkNow), target: nil, action: nil)
     private let autoToggle = NSButton(
-        checkboxWithTitle: "Check for updates automatically", target: nil, action: nil)
+        checkboxWithTitle: L10n.current.text(.checkAutomatically), target: nil, action: nil)
     private let note = NSTextField(labelWithString: "")
 
     init(updates: UpdateController) {
@@ -39,23 +40,19 @@ final class UpdateSettingsView: NSView {
 
         var lines: [String] = []
         if updates.lastUpgradeFailed {
-            lines.append("The last upgrade failed; see ~/Library/Logs/island-upgrade.log.")
+            lines.append(L10n.current.text(.upgradeFailedLog))
         }
         switch method {
         case .brew:
-            lines.append(
-                "Upgrading quits island, runs brew upgrade --cask \(UpdateSource.cask),\nand opens island again."
-            )
+            lines.append(L10n.current.formatted(.upgradeExplain, UpdateSource.cask))
         case .download:
-            lines.append(
-                "island was not installed with Homebrew, so updates open the download page.\nTip: brew install --cask \(UpdateSource.cask) enables one-click upgrades."
-            )
+            lines.append(L10n.current.formatted(.notHomebrew, UpdateSource.cask))
         }
         note.stringValue = lines.joined(separator: "\n")
     }
 
     private func build() {
-        let title = NSTextField(labelWithString: "Version")
+        let title = NSTextField(labelWithString: L10n.current.text(.versionLabel))
         title.font = .systemFont(ofSize: 13, weight: .semibold)
         summary.font = .systemFont(ofSize: 13)
         upgradeButton.bezelColor = .controlAccentColor
