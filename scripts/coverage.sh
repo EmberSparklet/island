@@ -17,7 +17,12 @@ if ! swift test --enable-code-coverage >"$log" 2>&1; then
     exit 1
 fi
 
-executable="$(find .build -type d -name '*.xctest' -path '*/debug/*' | head -1)/Contents/MacOS/IslandPackageTests"
+# SwiftPM names the bundle after the test target and puts the executable inside
+# it, so derive both instead of pinning a path that moves with the toolchain.
+# shortcut: only the first *.xctest bundle is measured; add one -object per
+# bundle if a second test target lands.
+bundle="$(find .build -type d -name '*.xctest' | head -1)"
+executable="$bundle/Contents/MacOS/$(basename "$bundle" .xctest)"
 if [[ ! -x "$executable" ]]; then
     echo "coverage: test binary not found at $executable" >&2
     exit 1
