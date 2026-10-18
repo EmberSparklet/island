@@ -61,7 +61,8 @@ defaults delete com.commallama.island IslandHotkeyEnabled   # 回到默认开启
 | `ISLAND_AGENT_HOME` | `~` | agent 数据根目录（`AgentHome`）。macOS 上改 `HOME` 无效（`homeDirectoryForCurrentUser` 不读环境变量），所以单独开这个口子 |
 | `ISLAND_IPC` | 开 | 入站通知通道开关；`off` / `0` / `false` / `no` 关闭。P0 默认开、无 token（token 属 P1） |
 | `ISLAND_IPC_PATH` | `~/Library/Application Support/island/ipc/island.sock` | socket 路径覆盖，测试与探针用 |
-| `ISLAND_LAUNCHER` | 开 | 悬浮窗启动器开关（`⇥` 输入一段话打开 chat 站点）；`off` / `0` / `false` / `no` 关闭 |
+| `ISLAND_LAUNCHER` | 开 | 悬浮窗启动器开关（`⇥` 输入一段话打开 chat 站点）；`off` / `0` / `false` / `no` 关闭，且优先于目标清单 |
+| `ISLAND_LAUNCHER_TARGETS` | 内置 DeepSeek 一条 | 启动器目标清单，条目格式 `id\|显示名\|站点基址\|查询参数`，条目之间用 `;` 分隔；非法条目跳过并在 `--print-config` 打 warning。变量缺失或只有分隔符时回落内置目标（不打 warning），条目全部非法时同样回落内置目标（打 warning） |
 
 ```bash
 ./build/Island.app/Contents/MacOS/Island --print-config   # 只解析并打印配置后退出，不开窗
@@ -135,7 +136,7 @@ Sources/IslandCore/            # 纯逻辑，不 import 任何 UI 框架；被�
   IPCSettings.swift           #   通道开关与 socket 路径（ISLAND_IPC / ISLAND_IPC_PATH）
   ExternalInbox.swift         #   外部通知行：独立未读计数 + client_event_id 去重窗口（D11）+ 全部清除
   OverlayScrollHint.swift     #   列表“下面还有内容”提示的纯几何判断
-  Launcher.swift               #   启动器目标（LauncherTarget）+ 问题 URL 构造（URLComponents 编码，空问题只开站点）+ 开关（ISLAND_LAUNCHER）
+  Launcher.swift               #   启动器目标（LauncherTarget）+ 清单解析（`ISLAND_LAUNCHER_TARGETS`，`id|name|url|q`，非法条目跳过）+ `⇥` 的目标循环 + 问题 URL 构造（URLComponents 编码，空问题只开站点）+ 开关（`ISLAND_LAUNCHER`）
   OverlaySelection.swift       #   悬浮窗查询过滤（TaskFilter）+ 键盘选中行 / ⌘N / ↩ 标注
   OverlayShortcut.swift        #   悬浮窗键盘模式的 ⌘, / ⌘1–9 判定（全角→半角归一，兼容 CJK 输入源）
   OverlayTheme.swift           #   主题预设 → 配色（OverlayPalette）+ UserDefaults 存储 + agent 图标选择
@@ -267,7 +268,7 @@ swift build                  # SwiftPM 自身拒绝 cyclic target dependency
 - **应用内升级**（issue `upgrade-n-feedback`）：版本真源是公开 tap 的 `Casks/island.rb`，经 GitHub contents API 读（`UpdateSource.caskRequest`，`Accept: application/vnd.github.raw` 直接拿文件；未认证 60 次/小时/IP，够用）。**不要换回 raw.githubusercontent.com**：它的 CDN 在发版 5 分钟后仍会返回旧 cask（issue `update-check-stale-cdn`）；0.2.0 / 0.2.1 还是 raw，只是晚几分钟看到新版。app 版本读 `CFBundleShortVersionString`，本地构建 `0.0.0` 视为开发版、永不提示。本地测提示用 `ISLAND_VERSION=0.0.9 ./scripts/build-app.sh`。有新版本时 Updates tab 名带 `🔴`（NSTabView 标签没法上色，emoji 是唯一不用自绘的办法）、菜单出现 `Update to x available…`。自动检查开关存 `IslandAutoCheckUpdates`（缺省开）。**升级只对 brew 装的有效**（`<prefix>/bin/brew` 与 `<prefix>/Caskroom/island` 都在）：spawn 脱离的 `sh` 后 island 立刻 `terminate`，shell 等 pid 退出再 `brew update && brew upgrade --cask lbyxiafei/tap/island`，输出与 `island-upgrade: exit N` 追加到 `~/Library/Logs/island-upgrade.log`，最后无论成败都 `open -b com.commallama.island`；下次打开 Updates tab 若日志最后一次非 0 会提示。先退出再升级，是为了让 cask 的 `uninstall quit:` 不去 quit 一个正在跑 brew 的父进程。不是 brew 装的就打开 tap 的 Release 页
 - **反馈没有服务端**（issue `upgrade-n-feedback` § Decision）：`Send Email` 是 `mailto:`（用户自己的邮件客户端）、`Open GitHub Issue` 是预填的 `lbyxiafei/island/issues/new`、`Copy` 兜底。URL 编码只放行 RFC 3986 unreserved 字符——`URLComponents` 不转义 `+` / `&`，邮件客户端会把 `+` 当空格
 - **入站通知（P0，issue `island-ipc-p0`）**：外部进程连 `~/Library/Application Support/island/ipc/island.sock`（目录 0700、socket 0600），协议是一行一个 JSON（单帧 ≤64 KiB），`hello` 必须第一个发。socket 认领顺序是 bind → EADDRINUSE 时 connect 探活 → 只有 `ECONNREFUSED` 才 unlink 重绑；**不要在启动时无条件 unlink**，会偷走在跑实例的路径（ipc.md § 3.1）。P0 只有 `hello` / `notify` / `query`；`subscribe` 属 P1，token 暂缓（D12）。外部通知在悬浮窗里是**独立的一节**（D11）：标题行左侧是条数、右侧是 `Clear all`（清空行，但保留去重窗口，重发同一 `client_event_id` 不会复活）；点击一行只标已读，不混进 `AgentInbox`。任务行与通知行共用同一个滚动区，面板高度用常量封顶（`OverlayContentView.maxVisibleNotifications = 8` 行通知的高度，含通知区标题），内容超出时列表底部中间显示半透 chevron（`OverlayScrollHint` 判定，滚到底即消失）；通知不再截断到 N 条。`IslandCore` 覆盖协议/状态机/去重；socket 与 CLI 属 wiring，已登记 `coverage.config`，用 `nc -U` / `island notify` 手测
-- **启动器（P3 第一段，issue `overlay-launcher-compose`）**：键盘模式下 `⇥` 把标题行的输入框在"筛选任务"与"提问"之间切换（compose 态下输入框不再过滤任务，右侧显示目标名胶囊，footer 换成 compose 提示）；`↩` 打开 `https://chat.deepseek.com/?q=<问题>` 并收起悬浮窗，问题为空就只开站点。**默认不带 `autosend`**（方案 D9）：浏览器只填输入框、不发送。目标本轮只有内置的 DeepSeek 一条，`LauncherTarget` 已按多目标建模；声明式 manifest 与已安装智能体探测仍未做。`URLComponents` 不转义 `+`，站点可能把它读成空格（`Launcher.url` 里有 `shortcut:` 注释）
+- **启动器（P3，issue `overlay-launcher-compose` + `launcher-targets`）**：键盘模式下 `⇥` 把标题行的输入框在"筛选任务"与"提问"之间切换（compose 态下输入框不再过滤任务，右侧显示**当前目标**名胶囊，footer 换成 compose 提示）；compose 态再按 `⇥` 在多个目标之间循环（首尾回绕；只有一个目标时退回筛选，与 P3a 行为一致），`esc` 退出。`↩` 打开当前目标的 `?<查询参数>=<问题>` 并收起悬浮窗，问题为空就只开站点。**默认不带 `autosend`**（方案 D9）：浏览器只填输入框、不发送。目标清单来自 `ISLAND_LAUNCHER_TARGETS`（缺省为内置 DeepSeek 一条；载体决策见方案 D13），声明式 manifest 与已安装智能体探测仍未做。`URLComponents` 不转义 `+`（站点可能读成空格）与 `?`（在查询里合法），`Launcher.url` 里有 `shortcut:` 注释
 - **开发流程**（PLAN § 开发指南，issue `dev-flow-brew-upgrade`，完整步骤见 `hai/reference/workflow/README.md`）：开发机只装 brew 那份。每次开发完成 = ship 到 master + `./scripts/publish.sh <下一个版本>`，开发者在 Settings → Updates 一键升级来验收，顺带验证 upgrade。只动 `hai/` 的提交不发版。agent 中途要跑构建产物，先 `pkill -x Island`，测完 `pkill -x Island; open /Applications/Island.app` 换回来
 - **app 图标**（issue `app-icon`）：源是 `assets/AppIcon.svg`，**改完要跑 `./scripts/render-app-icon.sh` 并把 `.icns` 一起提交**，`build-app.sh` 不渲染只拷贝。按 macOS 图标网格画（824 主体、圆角 185），否则 macOS 26 会套灰色底框。AppKit 的 SVG 渲染不支持 filter。Finder 有图标缓存，本地换图标后看不到变化时 `touch build/Island.app` 或重启 Finder。**系统设置 → 登录项里的图标是登录项注册那一刻记下的**：在无图标的 0.2.0 上注册过的机器，升级后仍显示空白，`/Applications/Island.app/Contents/MacOS/Island --login-item-disable` 再 `--login-item-enable` 重新注册即刷新（2026-09-28 实测；`lsregister -f`、重启 iconservicesagent 单独都不够确定）
 

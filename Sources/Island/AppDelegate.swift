@@ -66,7 +66,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
         content.setTheme(overlayStore.load())
         content.setShowsHints(overlayStore.loadShowsHints())
-        content.setLauncher(configuration.launcher.target)
+        content.setLauncher(configuration.launcher.targets)
         content.onOpenSettings = { [weak self] in
             self?.hideOverlay(reason: "overlay hidden to open settings")
             self?.settingsWindow?.show()

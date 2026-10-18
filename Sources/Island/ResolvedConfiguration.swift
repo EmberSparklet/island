@@ -36,7 +36,7 @@ struct ResolvedConfiguration {
             "task limit        \(taskLimit)",
             "agent home        \(agentHome.path)",
             "ipc socket        \(ipc.socketURL?.path ?? "off")",
-            "launcher          \(launcher.target?.name ?? "off")",
+            "launcher          \(launcherSummary)",
         ]
         if hotkey.usedFallback {
             lines.append(
@@ -48,7 +48,18 @@ struct ResolvedConfiguration {
                 "warning           \(Self.durationEnvironmentKey) unusable; using \(Self.secondsText(OverlayDuration.fallbackSeconds))s"
             )
         }
+        if launcher.ignoredInvalidEntries {
+            lines.append(
+                "warning           \(Launcher.targetsEnvironmentKey) has unusable entries; they were skipped"
+            )
+        }
         return lines.joined(separator: "\n")
+    }
+
+    /// `off`, or the names of every target the launcher offers, in order.
+    private var launcherSummary: String {
+        guard launcher.isEnabled else { return "off" }
+        return launcher.targets.map(\.name).joined(separator: ", ")
     }
 
     private var sourceNote: String {

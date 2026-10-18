@@ -49,6 +49,7 @@ public enum TextKey: String, CaseIterable, Sendable {
     case overlayHintsWithLauncher
     case launcherAsk
     case launcherHints
+    case launcherHintsNextTarget
 
     // Menu bar
     case summonOverlayWith
@@ -270,6 +271,7 @@ extension Localizer {
         .overlayHintsWithLauncher: "↑↓ move   ↩ open   ⇥ ask   ⌘1–9 jump   ⌘, settings   esc close",
         .launcherAsk: "Ask %@…",
         .launcherHints: "↩ send to %@   ⇥ back to search   esc cancel",
+        .launcherHintsNextTarget: "↩ send to %@   ⇥ next target   esc cancel",
 
         .summonOverlayWith: "Summon overlay (%@)",
         .summonHotkey: "Summon hotkey",
@@ -416,6 +418,7 @@ extension Localizer {
         .overlayHintsWithLauncher: "↑↓ 选择   ↩ 打开   ⇥ 提问   ⌘1–9 直达   ⌘, 设置   esc 关闭",
         .launcherAsk: "问 %@…",
         .launcherHints: "↩ 发送到 %@   ⇥ 返回筛选   esc 取消",
+        .launcherHintsNextTarget: "↩ 发送到 %@   ⇥ 切换目标   esc 取消",
 
         .summonOverlayWith: "召唤悬浮窗（%@）",
         .summonHotkey: "启用召唤快捷键",

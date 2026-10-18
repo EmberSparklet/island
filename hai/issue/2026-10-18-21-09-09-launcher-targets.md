@@ -2,9 +2,9 @@
 type: feat
 name: launcher-targets
 title: "启动器目标可选可配"
-status: in-progress
+status: solved
 created_ts: 2026-10-18T21:09:09+08:00
-updated_ts: 2026-10-18T21:09:59+08:00
+updated_ts: 2026-10-18T21:19:15+08:00
 ---
 
 > 总纲：[ISSUES.md](../ISSUES.md)
@@ -56,3 +56,9 @@ updated_ts: 2026-10-18T21:09:59+08:00
 ## 2026-10-18T21:09:59+08:00: new -> in-progress
 
 Scope-check: PLAN § Scope / 扩展机制 第 3 条（启动器，可选可配）；用户已选定载体为 ISLAND_LAUNCHER_TARGETS 环境变量、⇥ 循环目标、本轮不加 Kimi
+
+## 2026-10-18T21:19:15+08:00: in-progress -> solved
+
+P3b 的'可选可配'已实现：IslandCore 新增 ISLAND_LAUNCHER_TARGETS 解析（id|显示名|基址|查询参数，; 分隔，非法条目跳过并在 --print-config 报警告）、LauncherSettings 持有 [LauncherTarget] 且 ISLAND_LAUNCHER=off 优先、Launcher.composeTabAction（⇥ 进入/循环/单目标退出，首尾回绕）；OverlayContent compose 态显示当前目标（胶囊/占位符/footer），单目标时 ⇥ 仍退回筛选，与 P3a 等价；AppKit 不变的部分只有 NSWorkspace.open。证据：swift test --filter LauncherTests 22/22；make verify 全绿（447 测试、覆盖率 100 不低于基线 100、49 个 issue 一致）；真机 --print-config 六种取值实测（默认 DeepSeek / 两条 DeepSeek, Kimi / off / 混入坏条目打 warning / 全坏回落内置 / off 压过清单）；四张截图（单目标 / 两条目标选中第二条 / ISLAND_LAUNCHER=off / 切目标时问题保留）。未验证：真人按键路径与 DeepSeek/Kimi 的 ?q= 浏览器行为（TCC 挡 GUI 自动化，Kimi 未验证故未加入内置）。
+
+独立复核（verifier 子代理在同一 commit 上跑 make verify + 九组 --print-config + 克隆内真实 URL 打印）发现并已修的 4 处：（1）目标 ≥2 时 compose 态 `esc` 误走 ⇥ 的切换分支而不退出——现在 `esc` 恒定 leaveComposing，⇥ 的判定移进 `IslandCore.Launcher.composeTabAction`（有测试，不再躲在覆盖率排除的 AppKit 层）；（2）⇥ 切目标会清空已输入问题——现在保留草稿（截图 D）；（3）`Launcher.url` 丢 baseURL 的端口与自带 query——现在两者都保留（P3a 遗留，本轮可配置后可达）；（4）`hai/CONTEXT.md` 的回落描述补齐"条目全非法也回落内置并打 warning"。

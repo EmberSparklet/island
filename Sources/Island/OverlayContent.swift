@@ -52,10 +52,17 @@ final class OverlayContentView: NSView, NSTextFieldDelegate {
     private var notifications: [ExternalInbox.Entry] = []
     private var hotkey: HotkeySpec?
     private var isKeyboardMode = false
-    /// The launcher target `⇥` sends to; `nil` when the launcher is off.
-    private var launcherTarget: LauncherTarget?
+    /// Every target `⇥` offers; empty when the launcher is off.
+    private var launcherTargets: [LauncherTarget] = []
+    /// Which of them `↩` opens.
+    private var targetIndex = 0
     /// True while the field holds a question instead of a task filter.
     private var isComposing = false
+
+    /// The target `↩` opens while composing.
+    private var launcherTarget: LauncherTarget? {
+        launcherTargets.indices.contains(targetIndex) ? launcherTargets[targetIndex] : nil
+    }
     private(set) var showsHints = true
 
     private var showsFooter: Bool { isKeyboardMode && showsHints }
@@ -142,10 +149,11 @@ final class OverlayContentView: NSView, NSTextFieldDelegate {
         render()
     }
 
-    /// Which chat site `⇥` opens, or `nil` to leave the key alone.
-    func setLauncher(_ target: LauncherTarget?) {
-        launcherTarget = target
-        if target == nil { isComposing = false }
+    /// Which chat sites `⇥` offers; an empty list leaves the key alone.
+    func setLauncher(_ targets: [LauncherTarget]) {
+        launcherTargets = targets
+        targetIndex = 0
+        if targets.isEmpty { isComposing = false }
         render()
     }
 
@@ -346,13 +354,18 @@ final class OverlayContentView: NSView, NSTextFieldDelegate {
         footerBox.isHidden = !showsFooter
         footerHeightConstraint?.constant = showsFooter ? Self.footerHeight : 0
         bottomInsetConstraint?.constant = -(showsFooter ? Self.footerInset : Self.padding)
-        footer.stringValue = Self.footerText(launcher: launcherTarget, composing: isComposing)
+        footer.stringValue = Self.footerText(
+            launcher: launcherTarget, targetCount: launcherTargets.count, composing: isComposing)
     }
 
-    /// The footer only mentions `⇥ ask` when the launcher can actually run.
-    private static func footerText(launcher: LauncherTarget?, composing: Bool) -> String {
+    /// The footer only mentions `⇥ ask` when the launcher can actually run, and
+    /// only promises target switching when there is more than one target.
+    private static func footerText(
+        launcher: LauncherTarget?, targetCount: Int, composing: Bool
+    ) -> String {
         if composing, let launcher {
-            return L10n.current.formatted(.launcherHints, launcher.name)
+            let key: TextKey = targetCount > 1 ? .launcherHintsNextTarget : .launcherHints
+            return L10n.current.formatted(key, launcher.name)
         }
         return L10n.current.text(launcher == nil ? .overlayHints : .overlayHintsWithLauncher)
     }
@@ -564,10 +577,12 @@ final class OverlayContentView: NSView, NSTextFieldDelegate {
                 onSelect?(entry)
             }
         case #selector(NSResponder.insertTab(_:)):
-            guard toggleComposing() else { return false }
+            guard applyComposeTab() else { return false }
         case #selector(NSResponder.cancelOperation(_:)):
             if isComposing {
-                _ = toggleComposing()
+                // `esc` always leaves compose — never the target walk above,
+                // whatever `⇥` would have done.
+                leaveComposing()
             } else {
                 onDismiss?()
             }
@@ -577,15 +592,36 @@ final class OverlayContentView: NSView, NSTextFieldDelegate {
         return true
     }
 
-    /// `⇥` switches between filtering tasks and asking the launcher. False when
-    /// the launcher is switched off, so the key keeps its default meaning.
-    private func toggleComposing() -> Bool {
-        guard launcherTarget != nil else { return false }
-        isComposing.toggle()
+    /// `⇥` switches between filtering tasks and asking the launcher; while
+    /// composing it moves on to the next target. False when the launcher is
+    /// switched off, so the key keeps its default meaning.
+    private func applyComposeTab() -> Bool {
+        switch Launcher.composeTabAction(
+            composing: isComposing, targetIndex: targetIndex, targetCount: launcherTargets.count)
+        {
+        case .ignored:
+            return false
+        case .begin:
+            isComposing = true
+            searchField.stringValue = ""
+            selection.setQuery("")
+        case .moveToTarget(let index):
+            // The question the user already typed stays put; only the target moves.
+            targetIndex = index
+        case .end:
+            leaveComposing()
+            return true
+        }
+        render()
+        return true
+    }
+
+    /// Back to filtering tasks, dropping the question that was being composed.
+    private func leaveComposing() {
+        isComposing = false
         searchField.stringValue = ""
         selection.setQuery("")
         render()
-        return true
     }
 
     /// `↩` while composing: hand the question over. A blank one opens the site
