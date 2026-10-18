@@ -26,16 +26,34 @@ public struct LauncherTarget: Codable, Equatable, Sendable {
     public var baseURL: URL
     public var queryItem: String
     public var options: [LauncherOption]
+    /// Whether `⇥` may stop here. A ring saved before this flag existed reads as
+    /// enabled, so an upgrade never drops a mode the user configured.
+    public var isEnabled: Bool
 
     public init(
         id: String, name: String, baseURL: URL, queryItem: String,
-        options: [LauncherOption] = []
+        options: [LauncherOption] = [], isEnabled: Bool = true
     ) {
         self.id = id
         self.name = name
         self.baseURL = baseURL
         self.queryItem = queryItem
         self.options = options
+        self.isEnabled = isEnabled
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, name, baseURL, queryItem, options, isEnabled
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        name = try container.decode(String.self, forKey: .name)
+        baseURL = try container.decode(URL.self, forKey: .baseURL)
+        queryItem = try container.decode(String.self, forKey: .queryItem)
+        options = try container.decode([LauncherOption].self, forKey: .options)
+        isEnabled = try container.decodeIfPresent(Bool.self, forKey: .isEnabled) ?? true
     }
 }
 
@@ -52,6 +70,10 @@ public enum LauncherMode: Equatable, Sendable {
     }
 
     public var isSearchTasks: Bool { target == nil }
+
+    /// Whether `⇥` stops here. The task filter is island's own function and has
+    /// nothing to switch off, so it is always available.
+    public var isEnabled: Bool { target?.isEnabled ?? true }
 
     /// What the overlay shows in the mode capsule. The task filter reuses the
     /// search field's own name, so capsule and placeholder agree.
@@ -103,9 +125,9 @@ extension LauncherMode: Codable {
 /// ticked an option that sends it (decision D9, revised by D14) — a stray Enter
 /// in island must never send a message on its own.
 public enum Launcher {
-    /// DeepSeek is the one target measured end to end: its own bundle reads `q`,
-    /// and `autosend=1` sends a question of at most 800 characters, on the root
-    /// path of a logged-in session. Anything else is the user's to add.
+    /// DeepSeek is measured end to end: its own bundle reads `q`, and `autosend=1`
+    /// sends a question of at most 800 characters, on the root path of a
+    /// signed-in session.
     ///
     /// Computed rather than stored, so the option's label follows a language
     /// change, and `autosend` stays unticked until the user says otherwise.
@@ -122,10 +144,28 @@ public enum Launcher {
             ])
     }
 
-    /// The built-in ring: the task filter, then DeepSeek. Kimi is absent on
-    /// purpose — its old `_prefill_chat` deep link now redirects to the site
-    /// root with the parameters dropped.
-    public static var builtIn: [LauncherMode] { [.searchTasks, .target(deepSeek)] }
+    /// Kimi, measured by hand on 2026-10-19: the `.cn` deep link still honours
+    /// `prefill_prompt`, and `send_immediately=true` submits it. The newer
+    /// `www.kimi.com` does not — its bundle dropped that parameter and redirects
+    /// to the site root, which is why this target keeps the older host.
+    public static var kimi: LauncherTarget {
+        LauncherTarget(
+            id: "kimi",
+            name: "Kimi",
+            baseURL: URL(string: "https://kimi.moonshot.cn/_prefill_chat")!,
+            queryItem: "prefill_prompt",
+            options: [
+                LauncherOption(
+                    key: "send_immediately", value: "true",
+                    label: L10n.current.text(.launcherOptionAutoSend), isEnabled: false)
+            ])
+    }
+
+    /// The built-in ring: the task filter, then the two sites measured to work.
+    /// Anything else is the user's to add.
+    public static var builtIn: [LauncherMode] {
+        [.searchTasks, .target(deepSeek), .target(kimi)]
+    }
 
     /// The environment override lives in one variable (decision D13): entries
     /// are `id|name|baseURL|queryItem`, separated by `;`. Extra options are a
@@ -207,16 +247,51 @@ public enum Launcher {
 
     // MARK: - The mode ring
 
-    /// `⇥` in the overlay's keyboard mode: the next stop of the ring, wrapping at
+    /// `⇥` in the overlay's keyboard mode: the next *ticked* stop, wrapping at
     /// both ends. `nil` when the ring holds nothing to switch to, so the key
     /// keeps its default meaning.
     ///
     /// `esc` is deliberately *not* this function: while any mode but the task
     /// filter is showing it cancels the question and returns to the filter.
-    public static func nextModeIndex(from index: Int, count: Int) -> Int? {
-        guard count > 1 else { return nil }
-        guard index >= 0, index < count else { return 0 }
-        return (index + 1) % count
+    public static func nextModeIndex(from index: Int, in modes: [LauncherMode]) -> Int? {
+        let enabled = modes.indices.filter { modes[$0].isEnabled }
+        guard enabled.count > 1 else { return nil }
+        // An index that is not itself a stop (a mode unticked while the overlay
+        // was up) falls back to the top of the ring.
+        let position = enabled.firstIndex(of: index) ?? enabled.count - 1
+        return enabled[(position + 1) % enabled.count]
+    }
+
+    /// Where the overlay lands when it is summoned: the first ticked mode. The
+    /// task filter cannot be unticked, so a ring that came through `sanitized`
+    /// always has one; the empty ring reads as index 0, which is no mode at all
+    /// and therefore the task filter.
+    public static func summonIndex(in modes: [LauncherMode]) -> Int {
+        modes.firstIndex(where: \.isEnabled) ?? 0
+    }
+
+    /// Ticking a mode's box. The task filter refuses, like `removing` does: it is
+    /// island's own function and `esc` always has to land somewhere.
+    public static func settingEnabled(
+        _ enabled: Bool, at index: Int, in modes: [LauncherMode]
+    ) -> [LauncherMode] {
+        guard modes.indices.contains(index), let target = modes[index].target else { return modes }
+        var result = modes
+        var updated = target
+        updated.isEnabled = enabled
+        result[index] = .target(updated)
+        return result
+    }
+
+    /// The long-form note Settings shows behind a mode's ⓘ button. Only the sites
+    /// measured by hand have one; about a mode the user added, island has nothing
+    /// truthful to say.
+    public static func detail(for target: LauncherTarget) -> String? {
+        switch target.id {
+        case deepSeek.id: return L10n.current.text(.launcherDetailDeepSeek)
+        case kimi.id: return L10n.current.text(.launcherDetailKimi)
+        default: return nil
+        }
     }
 
     /// Exactly one `searchTasks` mode, added in front when missing, and one mode
@@ -291,15 +366,19 @@ public enum Launcher {
         public var baseURLText: String
         public var queryItem: String
         public var options: [LauncherOption]
+        /// Carried through untouched: the sheet edits the site, not the row's
+        /// tick box, and saving must not re-tick a mode the user switched off.
+        public var isEnabled: Bool
 
         public init(
             name: String = "", baseURLText: String = "", queryItem: String = "",
-            options: [LauncherOption] = []
+            options: [LauncherOption] = [], isEnabled: Bool = true
         ) {
             self.name = name
             self.baseURLText = baseURLText
             self.queryItem = queryItem
             self.options = options
+            self.isEnabled = isEnabled
         }
 
         public init(_ target: LauncherTarget) {
@@ -307,6 +386,7 @@ public enum Launcher {
             self.baseURLText = target.baseURL.absoluteString
             self.queryItem = target.queryItem
             self.options = target.options
+            self.isEnabled = target.isEnabled
         }
     }
 
@@ -376,7 +456,8 @@ public enum Launcher {
             name: name,
             baseURL: baseURL,
             queryItem: draft.queryItem.trimmingCharacters(in: .whitespacesAndNewlines),
-            options: draft.options.map(trimmed))
+            options: draft.options.map(trimmed),
+            isEnabled: draft.isEnabled)
     }
 
     private static func trimmed(_ option: LauncherOption) -> LauncherOption {
@@ -455,8 +536,11 @@ public struct LauncherSettings: Equatable, Sendable {
     /// The site modes only, in ring order.
     public var targets: [LauncherTarget] { modes.compactMap(\.target) }
 
-    /// Every mode's display name, in ring order.
-    public var names: [String] { modes.map(\.name) }
+    /// Every mode's display name, in ring order. A mode the user unticked is
+    /// marked, so `--print-config` and the log line show why `⇥` skips it.
+    public var names: [String] {
+        modes.map { $0.isEnabled ? $0.name : "\($0.name) (off)" }
+    }
 
     public static func resolve(
         environment: [String: String], stored: [LauncherMode]? = nil

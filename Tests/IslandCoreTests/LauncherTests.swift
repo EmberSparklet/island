@@ -57,6 +57,37 @@ final class LauncherTests: XCTestCase {
             "https://chat.deepseek.com/?q=hi")
     }
 
+    /// Kimi's `.cn` prefill link, measured by hand on 2026-10-19. `www.kimi.com`
+    /// is a different bundle: it drops the parameters and redirects to the root,
+    /// so the older host is the one worth building in.
+    func testTheBuiltInKimiTargetUsesThePrefillLink() {
+        XCTAssertEqual(Launcher.kimi.id, "kimi")
+        XCTAssertEqual(Launcher.kimi.name, "Kimi")
+        XCTAssertEqual(Launcher.kimi.queryItem, "prefill_prompt")
+        XCTAssertEqual(
+            Launcher.url(for: Launcher.kimi, query: "测试")?.absoluteString,
+            "https://kimi.moonshot.cn/_prefill_chat?prefill_prompt=%E6%B5%8B%E8%AF%95")
+        XCTAssertEqual(Launcher.kimi.options.map(\.key), ["send_immediately"])
+        XCTAssertEqual(Launcher.kimi.options[0].value, "true")
+        XCTAssertEqual(
+            Launcher.kimi.options[0].label, L10n.current.text(.launcherOptionAutoSend))
+        XCTAssertFalse(Launcher.kimi.options[0].isEnabled)
+
+        var send = Launcher.kimi
+        send.options[0].isEnabled = true
+        XCTAssertEqual(
+            Launcher.url(for: send, query: "hi")?.absoluteString,
+            "https://kimi.moonshot.cn/_prefill_chat?prefill_prompt=hi&send_immediately=true")
+    }
+
+    /// A target from the four-field environment channel arrives ticked: it has no
+    /// switch to carry, and `⇥` walking past it is what the variable always meant.
+    func testEnvironmentTargetsArriveTicked() {
+        let parsed = Launcher.parseTargets("kimi|Kimi|https://www.kimi.com/|q")
+        XCTAssertEqual(parsed.targets.map(\.isEnabled), [true])
+        XCTAssertEqual(parsed.targets.map(\.name), ["Kimi"])
+    }
+
     /// A configured base URL reaches the browser as written, minus the fragment.
     func testTheBaseURLKeepsItsPortAndItsOwnQuery() {
         let selfHosted = LauncherTarget(
@@ -178,28 +209,99 @@ final class LauncherTests: XCTestCase {
 
     // MARK: - The mode ring
 
-    func testTheRingStartsWithTheTaskFilterAndDeepSeek() {
-        XCTAssertEqual(Launcher.builtIn, [.searchTasks, .target(Launcher.deepSeek)])
+    func testTheBuiltInRingIsTheTaskFilterAndBothMeasuredSites() {
         XCTAssertEqual(
-            Launcher.builtIn.map(\.name), [L10n.current.text(.searchTasks), "DeepSeek"])
+            Launcher.builtIn,
+            [.searchTasks, .target(Launcher.deepSeek), .target(Launcher.kimi)])
+        XCTAssertEqual(
+            Launcher.builtIn.map(\.name), [L10n.current.text(.searchTasks), "DeepSeek", "Kimi"])
         XCTAssertTrue(Launcher.builtIn[0].isSearchTasks)
         XCTAssertNil(Launcher.builtIn[0].target)
+        XCTAssertTrue(Launcher.builtIn.allSatisfy(\.isEnabled))
     }
 
-    /// `⇥` used to start composing; now it just moves to the next stop, and a
-    /// ring with nothing else in it leaves the key alone.
+    /// `⇥` used to start composing; now it just moves to the next ticked stop, and
+    /// a ring with nothing else ticked leaves the key alone.
     func testTabWalksTheRingAndWrapsAtBothEnds() {
-        XCTAssertEqual(Launcher.nextModeIndex(from: 0, count: 3), 1)
-        XCTAssertEqual(Launcher.nextModeIndex(from: 1, count: 3), 2)
-        XCTAssertEqual(Launcher.nextModeIndex(from: 2, count: 3), 0)
-        XCTAssertEqual(Launcher.nextModeIndex(from: 1, count: 2), 0)
-        XCTAssertNil(Launcher.nextModeIndex(from: 0, count: 1))
-        XCTAssertNil(Launcher.nextModeIndex(from: 0, count: 0))
+        let ring: [LauncherMode] = [
+            .searchTasks, .target(Launcher.kimi), .target(Launcher.deepSeek),
+        ]
+        XCTAssertEqual(Launcher.nextModeIndex(from: 0, in: ring), 1)
+        XCTAssertEqual(Launcher.nextModeIndex(from: 1, in: ring), 2)
+        XCTAssertEqual(Launcher.nextModeIndex(from: 2, in: ring), 0)
+        XCTAssertEqual(
+            Launcher.nextModeIndex(from: 1, in: [.searchTasks, .target(Launcher.kimi)]), 0)
+        XCTAssertNil(Launcher.nextModeIndex(from: 0, in: [.searchTasks]))
+        XCTAssertNil(Launcher.nextModeIndex(from: 0, in: []))
+    }
+
+    /// An unticked mode is skipped. An index that is no longer a stop — the user
+    /// unticked the mode the overlay was showing — falls back to the top.
+    func testTabSkipsUntickedModes() {
+        var ring: [LauncherMode] = [
+            .searchTasks, .target(Launcher.kimi), .target(Launcher.deepSeek),
+        ]
+        ring = Launcher.settingEnabled(false, at: 1, in: ring)
+        XCTAssertEqual(Launcher.nextModeIndex(from: 0, in: ring), 2)
+        XCTAssertEqual(Launcher.nextModeIndex(from: 2, in: ring), 0)
+        XCTAssertEqual(Launcher.nextModeIndex(from: 1, in: ring), 0)
     }
 
     func testAnOutOfRangeIndexStartsOver() {
-        XCTAssertEqual(Launcher.nextModeIndex(from: 9, count: 3), 0)
-        XCTAssertEqual(Launcher.nextModeIndex(from: -1, count: 3), 0)
+        let ring: [LauncherMode] = [
+            .searchTasks, .target(Launcher.kimi), .target(Launcher.deepSeek),
+        ]
+        XCTAssertEqual(Launcher.nextModeIndex(from: 9, in: ring), 0)
+        XCTAssertEqual(Launcher.nextModeIndex(from: -1, in: ring), 0)
+    }
+
+    func testSummonLandsOnTheFirstTickedMode() {
+        let ring: [LauncherMode] = [
+            .target(Launcher.kimi), .searchTasks, .target(Launcher.deepSeek),
+        ]
+        XCTAssertEqual(Launcher.summonIndex(in: ring), 0)
+        let withoutKimi = Launcher.settingEnabled(false, at: 0, in: ring)
+        XCTAssertEqual(withoutKimi[0].target?.isEnabled, false)
+        XCTAssertEqual(Launcher.summonIndex(in: withoutKimi), 1)
+        XCTAssertEqual(Launcher.summonIndex(in: []), 0)
+    }
+
+    /// The task filter has nothing to switch off — the task list and `esc` need it
+    /// — so its box is refused. The view shows it ticked and disabled.
+    func testTheTaskFilterCannotBeUnticked() {
+        let ring: [LauncherMode] = [.searchTasks, .target(Launcher.kimi)]
+        XCTAssertTrue(ring[0].isEnabled)
+        XCTAssertEqual(Launcher.settingEnabled(false, at: 0, in: ring), ring)
+        XCTAssertEqual(Launcher.settingEnabled(false, at: 9, in: ring), ring)
+        let off = Launcher.settingEnabled(false, at: 1, in: ring)
+        XCTAssertEqual(off[1].isEnabled, false)
+        XCTAssertEqual(Launcher.settingEnabled(true, at: 1, in: off), ring)
+    }
+
+    /// The invariant that keeps summoning sane: a sanitized ring always holds a
+    /// ticked mode, because the task filter cannot be unticked.
+    func testASanitizedRingAlwaysHasATickedMode() {
+        XCTAssertTrue(Launcher.sanitized([]).contains(where: \.isEnabled))
+        XCTAssertTrue(Launcher.builtIn.contains(where: \.isEnabled))
+    }
+
+    /// `--print-config` and the log line say which modes `⇥` will skip.
+    func testTheSummaryMarksUntickedModes() {
+        let ring = Launcher.settingEnabled(
+            false, at: 1, in: [.searchTasks, .target(Launcher.kimi), .target(Launcher.deepSeek)])
+        let settings = LauncherSettings(modes: ring, source: .settings)
+        XCTAssertEqual(
+            settings.names, [L10n.current.text(.searchTasks), "Kimi (off)", "DeepSeek"])
+    }
+
+    /// Only the sites measured by hand have a note to show; about a mode the user
+    /// added, island has nothing truthful to say.
+    func testOnlyTheMeasuredSitesHaveADetailedNote() {
+        XCTAssertEqual(
+            Launcher.detail(for: Launcher.deepSeek), L10n.current.text(.launcherDetailDeepSeek))
+        XCTAssertEqual(
+            Launcher.detail(for: Launcher.kimi), L10n.current.text(.launcherDetailKimi))
+        XCTAssertNil(Launcher.detail(for: target))
     }
 
     func testSanitizingPutsTheTaskFilterBackInFront() {
@@ -280,6 +382,17 @@ final class LauncherTests: XCTestCase {
             Launcher.target(from: draft, keepingID: deepSeek.id, taken: [])?.options.first?
                 .isEnabled,
             true)
+    }
+
+    /// The sheet edits the site, never the row's tick box: an edit that saved a
+    /// mode back as ticked would undo the user's choice behind their back.
+    func testEditingAnUntickedModeKeepsItUnticked() {
+        var deepSeek = Launcher.deepSeek
+        deepSeek.isEnabled = false
+        let draft = Launcher.Draft(deepSeek)
+        XCTAssertFalse(draft.isEnabled)
+        XCTAssertEqual(
+            Launcher.target(from: draft, keepingID: deepSeek.id, taken: []), deepSeek)
     }
 
     func testAValidDraftHasNoIssues() {
@@ -418,7 +531,7 @@ final class LauncherTests: XCTestCase {
         let settings = LauncherSettings.resolve(environment: [:])
         XCTAssertTrue(settings.isEnabled)
         XCTAssertEqual(settings.modes, Launcher.builtIn)
-        XCTAssertEqual(settings.targets, [Launcher.deepSeek])
+        XCTAssertEqual(settings.targets, [Launcher.deepSeek, Launcher.kimi])
         XCTAssertEqual(settings.source, .builtIn)
         XCTAssertFalse(settings.ignoredInvalidEntries)
     }

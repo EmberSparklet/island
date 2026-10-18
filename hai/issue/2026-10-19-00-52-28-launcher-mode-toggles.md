@@ -2,9 +2,9 @@
 type: feat
 name: launcher-mode-toggles
 title: "启动器模式可停用、内置 Kimi、设置页文案与滚动"
-status: in-progress
+status: solved
 created_ts: 2026-10-19T00:52:28+08:00
-updated_ts: 2026-10-19T00:53:02+08:00
+updated_ts: 2026-10-19T01:21:51+08:00
 ---
 
 > 总纲：[ISSUES.md](../ISSUES.md)
@@ -53,3 +53,13 @@ P3c（`125207e`）让模式环可以在设置页配置，但人验收后提出�
 ## 2026-10-19T00:53:02+08:00: new -> in-progress
 
 启动：Scope-check: hai/PLAN.md § Scope / 扩展机制 #3。五条要求（内置 Kimi、恢复 DeepSeek 默认、模式启用勾选框、设置页文案/滚动/ⓘ、Tab 键名）见正文 Decision。人在 2026-10-19 会话中明确要求。
+
+## 2026-10-19T01:21:51+08:00: in-progress -> solved
+
+做了什么：① 每个模式行末尾一个启用勾选框，状态落在 `LauncherTarget.isEnabled`（旧数据缺该字段读作启用），`Tab` 只走勾选的行、召唤落点改成第一个勾选的行（`Launcher.summonIndex`），「搜索任务」恒勾选且置灰不可停用 —— 所以不存在"一个都没勾"的状态；② 内置环 = 搜索任务 + DeepSeek + Kimi，Kimi 按人实测的 `.cn` 深链 `kimi.moonshot.cn/_prefill_chat`（问题参数 `prefill_prompt`，附加参数 `send_immediately=true`，默认不勾）；③ 设置页文案与布局重做：一句短说明 + 页面级 ⓘ（配置方法）+ 行内 ⓘ（只给内置站点，`Launcher.detail(for:)`），列表区域自己滚动而「添加模式…」固定在列表下方；④ 界面文案里的 `⇥` 一律改成 `Tab 键`；⑤ `--print-config` 给未勾选的行加 `(off)`。
+
+人报的"DeepSeek 默认配置没了"的根因：不是产品缺陷，是 2026-10-18 做优先级探测时用 `defaults write` 写进真实域的残留环（`kimi|Kimi|https://www.kimi.com/|q`，无 options），保存值优先于内置，于是把 DeepSeek 顶掉。已把该键的值备份到 `/tmp/island-evidence/IslandLauncherModes.residue.json` 与同目录的 plist 快照后删除；"探针不要写真实 UserDefaults 域"的教训写进 `CONTEXT.md` § Gotchas。
+
+已验证：`make verify` 全绿（497 tests / 0 failures、覆盖率 100.00 ≥ baseline 100.00、cycles、issue-check 51 条一致）；离屏渲染三张图（默认三模式的勾选框/默认徽标/ⓘ、12 模式滚动且 `添加模式…` frame 前后不动、未勾选模式 + 打开的 ⓘ popover），harness 的"透明位图导致文字看不见"问题修复后才采到有效证据。
+
+未覆盖：真人鼠标拖拽与真人按键（TCC `-25211` 挡 GUI 自动化）；Kimi 未登录时是否只预填不发送；DeepSeek 800 字上限；`README.zh-CN.md` 自 P3a 起就没有启动器一节（既有缺口，本轮未补）。

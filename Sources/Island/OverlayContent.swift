@@ -152,19 +152,19 @@ final class OverlayContentView: NSView, NSTextFieldDelegate {
         render()
     }
 
-    /// The mode ring `⇥` walks, in order; the first entry is the mode the
+    /// The mode ring `⇥` walks, in order; the first *ticked* entry is the mode the
     /// overlay opens in. An empty ring leaves the key alone.
     func setLauncher(_ modes: [LauncherMode]) {
         launcherModes = modes
-        modeIndex = 0
+        modeIndex = Launcher.summonIndex(in: modes)
         render()
     }
 
-    /// Keyboard mode starts from an empty query, on the ring's first mode, with
+    /// Keyboard mode starts from an empty query, on the ring's entry mode, with
     /// the first task row highlighted.
     func setKeyboardMode(_ enabled: Bool) {
         isKeyboardMode = enabled
-        modeIndex = 0
+        modeIndex = Launcher.summonIndex(in: launcherModes)
         searchField.stringValue = ""
         selection.setQuery("")
         render()
@@ -358,16 +358,18 @@ final class OverlayContentView: NSView, NSTextFieldDelegate {
         footerBox.isHidden = !showsFooter
         footerHeightConstraint?.constant = showsFooter ? Self.footerHeight : 0
         bottomInsetConstraint?.constant = -(showsFooter ? Self.footerInset : Self.padding)
-        footer.stringValue = Self.footerText(mode: launcherMode, modeCount: launcherModes.count)
+        footer.stringValue = Self.footerText(
+            mode: launcherMode, canSwitch: launcherModes.filter(\.isEnabled).count > 1)
     }
 
-    /// The footer only mentions `⇥ ask` while the ring can actually move on, and
-    /// names the site the question would go to.
-    private static func footerText(mode: LauncherMode?, modeCount: Int) -> String {
+    /// The footer names the site the question would go to, and mentions the mode
+    /// key only while the ring can actually move on.
+    private static func footerText(mode: LauncherMode?, canSwitch: Bool) -> String {
         if let target = mode?.target {
-            return L10n.current.formatted(.launcherHintsNextMode, target.name)
+            return L10n.current.formatted(
+                canSwitch ? .launcherHintsNextMode : .launcherHintsCompose, target.name)
         }
-        return L10n.current.text(modeCount > 1 ? .overlayHintsWithLauncher : .overlayHints)
+        return L10n.current.text(canSwitch ? .overlayHintsWithLauncher : .overlayHints)
     }
 
     private func applyPalette() {
@@ -592,13 +594,13 @@ final class OverlayContentView: NSView, NSTextFieldDelegate {
         return true
     }
 
-    /// `⇥` walks the mode ring and wraps. False when the ring holds nothing to
-    /// switch to, so the key keeps its default meaning.
+    /// `⇥` walks the ring's ticked modes and wraps. False when the ring holds
+    /// nothing to switch to, so the key keeps its default meaning.
     ///
     /// Whatever is typed stays put across the switch: a filter word becomes the
     /// question, and a question follows the user from one site to the next.
     private func applyModeTab() -> Bool {
-        guard let next = Launcher.nextModeIndex(from: modeIndex, count: launcherModes.count)
+        guard let next = Launcher.nextModeIndex(from: modeIndex, in: launcherModes)
         else { return false }
         modeIndex = next
         // The field changes meaning with the mode. Back on the task filter it

@@ -5,7 +5,7 @@
 | type | name | title | status | created_ts | updated_ts |
 |---|---|---|---|---|---|
 | bug | [terminal-reopen-stops-working](./issue/2026-10-01-13-18-16-terminal-reopen-stops-working.md) | 长时间运行后点击终端任务不再跳转（Claude 桌面版正常） | new | 2026-10-01T13:18:16-07:00 | 2026-10-01T13:18:29-07:00 |
-| feat | [launcher-mode-toggles](./issue/2026-10-19-00-52-28-launcher-mode-toggles.md) | 启动器模式可停用、内置 Kimi、设置页文案与滚动 | in-progress | 2026-10-19T00:52:28+08:00 | 2026-10-19T00:53:02+08:00 |
+| feat | [launcher-mode-toggles](./issue/2026-10-19-00-52-28-launcher-mode-toggles.md) | 启动器模式可停用、内置 Kimi、设置页文案与滚动 | solved | 2026-10-19T00:52:28+08:00 | 2026-10-19T01:21:51+08:00 |
 | feat | [launcher-modes](./issue/2026-10-18-22-37-48-launcher-modes.md) | 启动器模式可配：设置页拖拽排序 + 每模式附加参数 | solved | 2026-10-18T22:37:48+08:00 | 2026-10-18T23:44:03+08:00 |
 | feat | [launcher-targets](./issue/2026-10-18-21-09-09-launcher-targets.md) | 启动器目标可选可配 | solved | 2026-10-18T21:09:09+08:00 | 2026-10-18T21:19:15+08:00 |
 | feat | [overlay-launcher-compose](./issue/2026-10-18-18-39-26-overlay-launcher-compose.md) | 悬浮窗启动器：输入一段话打开 DeepSeek | solved | 2026-10-18T18:39:26+08:00 | 2026-10-18T18:47:57+08:00 |

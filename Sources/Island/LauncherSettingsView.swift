@@ -2,14 +2,18 @@ import AppKit
 import IslandCore
 
 /// Settings → Launcher: one row per mode of the overlay's ring, in the order
-/// `⇥` walks them, the first row being the mode the overlay opens in. A row
-/// carries the mode's name, its kind, a checkbox per extra parameter and the
-/// edit / delete actions; rows are reordered by dragging, and a sheet adds or
-/// edits the site behind one of them.
+/// `⇥` walks them. A row carries the mode's name, its kind, an ⓘ behind the
+/// sites island measured by hand, the edit / delete actions and a tick box that
+/// decides whether `⇥` stops there at all; rows are reordered by dragging, and a
+/// sheet adds or edits the site behind one of them.
 ///
-/// Every judgement — validation, slug ids, the immutability of the task filter —
-/// lives in `Launcher` (IslandCore): this view only mirrors the ring and reports
-/// each change through `onChange`.
+/// The list scrolls inside its own region, and `Add mode…` sits in a bar below
+/// it, so the button never moves with the content.
+///
+/// Every judgement — validation, slug ids, where the overlay lands, the
+/// immutability of the task filter — lives in `Launcher` (IslandCore): this view
+/// only mirrors the ring and reports each change through `onChange`, which hands
+/// back the source that is actually in force.
 @MainActor
 final class LauncherSettingsView: NSView, NSTableViewDataSource, NSTableViewDelegate,
     NSTextFieldDelegate
@@ -21,6 +25,9 @@ final class LauncherSettingsView: NSView, NSTableViewDataSource, NSTableViewDele
     private static let sheetWidth: CGFloat = 510
     private static let sheetLabelWidth: CGFloat = 110
     private static let sheetFieldWidth: CGFloat = 300
+    /// The ⓘ is a fixed square, which keeps the footnote's wrap width fixed too.
+    private static let infoButtonSize: CGFloat = 16
+    private static let popoverWidth: CGFloat = 320
 
     private var modes: [LauncherMode]
     /// Which ring is actually in force. It cannot be recomputed from here — the
@@ -32,6 +39,8 @@ final class LauncherSettingsView: NSView, NSTableViewDataSource, NSTableViewDele
 
     private let tableView = ModeTableView()
     private var tableHeight: NSLayoutConstraint?
+    /// The ⓘ note on screen, kept so a reload can dismiss it.
+    private var popover: NSPopover?
 
     // Sheet state, non-nil only while the sheet is up.
     private var sheet: NSWindow?
@@ -69,59 +78,80 @@ final class LauncherSettingsView: NSView, NSTableViewDataSource, NSTableViewDele
     // MARK: - Layout
 
     private func build() {
-        let stack = NSStackView()
-        stack.orientation = .vertical
-        stack.alignment = .leading
-        stack.spacing = 6
-        stack.edgeInsets = NSEdgeInsets(top: 16, left: 20, bottom: 16, right: 20)
-        stack.translatesAutoresizingMaskIntoConstraints = false
-
+        // Top: one line of what this tab is, with the page's own ⓘ, then where
+        // the live ring comes from.
         let footnote = NSTextField(
             wrappingLabelWithString: L10n.current.text(.launcherSettingsFootnote))
         footnote.font = .systemFont(ofSize: 11)
         footnote.textColor = .secondaryLabelColor
         footnote.translatesAutoresizingMaskIntoConstraints = false
-        stack.addArrangedSubview(footnote)
-        footnote.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -40).isActive = true
+        addSubview(footnote)
+
+        let pageInfo = Self.infoButton(target: self, action: #selector(howToTapped(_:)))
+        pageInfo.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(pageInfo)
 
         sourceLine.font = .systemFont(ofSize: 11)
         sourceLine.textColor = .tertiaryLabelColor
         sourceLine.translatesAutoresizingMaskIntoConstraints = false
         refreshSourceLine()
-        stack.addArrangedSubview(sourceLine)
-        stack.setCustomSpacing(12, after: sourceLine)
+        addSubview(sourceLine)
 
+        // Middle: the only region that scrolls. The table keeps its `tableHeight`
+        // constraint, which is what makes the rows scroll inside this clip view.
         configureTable()
-        stack.addArrangedSubview(tableView)
-        // The stack's own edge insets are not part of an arranged view's width.
-        tableView.widthAnchor.constraint(equalTo: stack.widthAnchor, constant: -40).isActive =
-            true
-        stack.setCustomSpacing(12, after: tableView)
-
-        let add = NSButton(
-            title: L10n.current.text(.launcherAdd), target: self, action: #selector(addTapped))
-        stack.addArrangedSubview(add)
-
-        let document = LauncherDocumentView()
-        document.translatesAutoresizingMaskIntoConstraints = false
-        document.addSubview(stack)
         let scroll = NSScrollView()
         scroll.hasVerticalScroller = true
-        scroll.drawsBackground = false
-        scroll.documentView = document
+        scroll.documentView = tableView
         scroll.translatesAutoresizingMaskIntoConstraints = false
         addSubview(scroll)
 
+        // Bottom: a bar that stays put while the list scrolls.
+        let bar = NSView()
+        bar.translatesAutoresizingMaskIntoConstraints = false
+        let separator = NSBox()
+        separator.boxType = .separator
+        separator.translatesAutoresizingMaskIntoConstraints = false
+        let add = NSButton(
+            title: L10n.current.text(.launcherAdd), target: self, action: #selector(addTapped))
+        add.translatesAutoresizingMaskIntoConstraints = false
+        bar.addSubview(separator)
+        bar.addSubview(add)
+        addSubview(bar)
+
         NSLayoutConstraint.activate([
-            scroll.leadingAnchor.constraint(equalTo: leadingAnchor),
-            scroll.trailingAnchor.constraint(equalTo: trailingAnchor),
-            scroll.topAnchor.constraint(equalTo: topAnchor),
-            scroll.bottomAnchor.constraint(equalTo: bottomAnchor),
-            document.widthAnchor.constraint(equalTo: scroll.contentView.widthAnchor),
-            stack.leadingAnchor.constraint(equalTo: document.leadingAnchor),
-            stack.trailingAnchor.constraint(equalTo: document.trailingAnchor),
-            stack.topAnchor.constraint(equalTo: document.topAnchor),
-            stack.bottomAnchor.constraint(equalTo: document.bottomAnchor),
+            footnote.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 20),
+            footnote.topAnchor.constraint(equalTo: topAnchor, constant: 16),
+            footnote.widthAnchor.constraint(
+                equalTo: widthAnchor, constant: -40 - Self.infoButtonSize - 6),
+            pageInfo.leadingAnchor.constraint(equalTo: footnote.trailingAnchor, constant: 6),
+            pageInfo.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -20),
+            pageInfo.firstBaselineAnchor.constraint(equalTo: footnote.firstBaselineAnchor),
+            pageInfo.widthAnchor.constraint(equalToConstant: Self.infoButtonSize),
+            pageInfo.heightAnchor.constraint(equalToConstant: Self.infoButtonSize),
+
+            sourceLine.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 20),
+            sourceLine.trailingAnchor.constraint(lessThanOrEqualTo: trailingAnchor, constant: -20),
+            sourceLine.topAnchor.constraint(equalTo: footnote.bottomAnchor, constant: 6),
+
+            scroll.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 20),
+            scroll.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -20),
+            scroll.topAnchor.constraint(equalTo: sourceLine.bottomAnchor, constant: 12),
+            scroll.bottomAnchor.constraint(equalTo: bar.topAnchor, constant: -12),
+
+            tableView.leadingAnchor.constraint(equalTo: scroll.contentView.leadingAnchor),
+            tableView.topAnchor.constraint(equalTo: scroll.contentView.topAnchor),
+            tableView.widthAnchor.constraint(equalTo: scroll.contentView.widthAnchor),
+
+            bar.leadingAnchor.constraint(equalTo: leadingAnchor),
+            bar.trailingAnchor.constraint(equalTo: trailingAnchor),
+            bar.bottomAnchor.constraint(equalTo: bottomAnchor),
+            separator.leadingAnchor.constraint(equalTo: bar.leadingAnchor),
+            separator.trailingAnchor.constraint(equalTo: bar.trailingAnchor),
+            separator.topAnchor.constraint(equalTo: bar.topAnchor),
+            add.leadingAnchor.constraint(equalTo: bar.leadingAnchor, constant: 20),
+            add.topAnchor.constraint(equalTo: separator.bottomAnchor, constant: 10),
+            add.bottomAnchor.constraint(equalTo: bar.bottomAnchor, constant: -12),
         ])
     }
 
@@ -131,6 +161,7 @@ final class LauncherSettingsView: NSView, NSTableViewDataSource, NSTableViewDele
         tableView.addTableColumn(column)
         tableView.headerView = nil
         tableView.style = .plain
+        tableView.backgroundColor = .clear
         tableView.rowHeight = Self.baseRowHeight
         tableView.intercellSpacing = NSSize(width: 0, height: 0)
         tableView.gridStyleMask = []
@@ -147,9 +178,10 @@ final class LauncherSettingsView: NSView, NSTableViewDataSource, NSTableViewDele
         tableHeight?.isActive = true
     }
 
-    /// The whole page lives in one scroll view, so the table is laid out at its
-    /// full height instead of scrolling inside a second scroller.
+    /// The rows are laid out at their full height, so the scroll region above the
+    /// bar is what moves, not the bar.
     private func reload() {
+        popover?.close()
         tableView.reloadData()
         let total = modes.reduce(CGFloat.zero) { $0 + Self.rowHeight(for: $1) }
         tableHeight?.constant = max(total, Self.baseRowHeight)
@@ -194,6 +226,22 @@ final class LauncherSettingsView: NSView, NSTableViewDataSource, NSTableViewDele
         return button
     }
 
+    /// The ⓘ used both for the page's `how to` note and for a mode's own note.
+    private static func infoButton(target: AnyObject, action: Selector) -> NSButton {
+        let button = NSButton(
+            image: NSImage(systemSymbolName: "info.circle", accessibilityDescription: nil)
+                ?? NSImage(),
+            target: target, action: action)
+        button.isBordered = false
+        button.imagePosition = .imageOnly
+        button.contentTintColor = .secondaryLabelColor
+        button.toolTip = L10n.current.text(.launcherInfo)
+        button.setAccessibilityLabel(L10n.current.text(.launcherInfo))
+        button.setContentHuggingPriority(.required, for: .horizontal)
+        button.setContentCompressionResistancePriority(.required, for: .horizontal)
+        return button
+    }
+
     /// A view that absorbs the spare width of a horizontal stack.
     private static func flexibleSpacer() -> NSView {
         let spacer = NSView()
@@ -232,13 +280,24 @@ final class LauncherSettingsView: NSView, NSTableViewDataSource, NSTableViewDele
         header.alignment = .centerY
         header.spacing = 8
         header.translatesAutoresizingMaskIntoConstraints = false
-        if index == 0 { header.addArrangedSubview(Self.badge(L10n.current.text(.launcherDefault))) }
+        // The badge follows the landing spot, not the top of the list: a row
+        // nobody ticked is not where a summon goes.
+        if index == Launcher.summonIndex(in: modes) {
+            header.addArrangedSubview(Self.badge(L10n.current.text(.launcherDefault)))
+        }
 
         let name = Self.label(mode.name, size: 13, color: .labelColor)
         name.lineBreakMode = .byTruncatingTail
         name.setContentHuggingPriority(.defaultHigh, for: .horizontal)
         name.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         header.addArrangedSubview(name)
+
+        // Only the sites island measured by hand have a note to show.
+        if let target = mode.target, Launcher.detail(for: target) != nil {
+            let info = Self.infoButton(target: self, action: #selector(detailTapped(_:)))
+            info.identifier = NSUserInterfaceItemIdentifier(target.id)
+            header.addArrangedSubview(info)
+        }
 
         let kind =
             mode.isSearchTasks
@@ -260,6 +319,21 @@ final class LauncherSettingsView: NSView, NSTableViewDataSource, NSTableViewDele
         }
         stack.addArrangedSubview(header)
         header.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+
+        // The row's last control: whether `⇥` stops here. The task filter is
+        // island's own function, so its box is on and cannot be clicked.
+        let enabled = NSButton(
+            checkboxWithTitle: L10n.current.text(.launcherFieldOptionEnabled), target: self,
+            action: #selector(enabledToggled(_:)))
+        enabled.state = mode.isEnabled ? .on : .off
+        enabled.controlSize = .small
+        enabled.font = .systemFont(ofSize: 11)
+        enabled.tag = index
+        if mode.isSearchTasks {
+            enabled.isEnabled = false
+            enabled.toolTip = L10n.current.text(.launcherAlwaysOn)
+        }
+        header.addArrangedSubview(enabled)
 
         for (optionIndex, option) in (mode.target?.options ?? []).enumerated() {
             let box = NSButton(
@@ -332,14 +406,26 @@ final class LauncherSettingsView: NSView, NSTableViewDataSource, NSTableViewDele
         // is exactly what `Launcher.moving` expects.
         let moved = Launcher.moving(modes, from: from, to: row)
         guard moved != modes else { return false }
-        modes = Launcher.sanitized(moved)
-        reload()
-        source = onChange(modes)
-        refreshSourceLine()
+        commit(moved)
         return true
     }
 
     // MARK: - Row actions
+
+    /// Hands a new ring to the host and mirrors what comes back: only the host
+    /// knows which source is in force once the saved list changed.
+    private func commit(_ updated: [LauncherMode]) {
+        modes = Launcher.sanitized(updated)
+        source = onChange(modes)
+        refreshSourceLine()
+        reload()
+    }
+
+    @objc private func enabledToggled(_ sender: NSButton) {
+        let toggled = Launcher.settingEnabled(sender.state == .on, at: sender.tag, in: modes)
+        guard toggled != modes else { return }
+        commit(toggled)
+    }
 
     @objc private func optionToggled(_ sender: NSButton) {
         guard let id = sender.identifier?.rawValue,
@@ -347,13 +433,48 @@ final class LauncherSettingsView: NSView, NSTableViewDataSource, NSTableViewDele
             var target = modes[index].target, target.options.indices.contains(sender.tag)
         else { return }
         target.options[sender.tag].isEnabled = sender.state == .on
-        modes = Launcher.sanitized(Launcher.replacing(modes, at: index, with: .target(target)))
-        source = onChange(modes)
-        refreshSourceLine()
+        commit(Launcher.replacing(modes, at: index, with: .target(target)))
     }
 
     @objc private func editTapped(_ sender: NSButton) {
         openSheet(for: sender.identifier?.rawValue)
+    }
+
+    @objc private func detailTapped(_ sender: NSButton) {
+        guard let id = sender.identifier?.rawValue,
+            let target = modes.compactMap(\.target).first(where: { $0.id == id }),
+            let detail = Launcher.detail(for: target)
+        else { return }
+        showPopover(detail, from: sender)
+    }
+
+    @objc private func howToTapped(_ sender: NSButton) {
+        showPopover(L10n.current.text(.launcherHowTo), from: sender)
+    }
+
+    /// One line of text under the button that was clicked.
+    private func showPopover(_ text: String, from anchor: NSView) {
+        popover?.close()
+        let label = NSTextField(wrappingLabelWithString: text)
+        label.font = .systemFont(ofSize: 12)
+        label.preferredMaxLayoutWidth = Self.popoverWidth - 24
+        label.translatesAutoresizingMaskIntoConstraints = false
+        let host = NSView()
+        host.addSubview(label)
+        NSLayoutConstraint.activate([
+            host.widthAnchor.constraint(equalToConstant: Self.popoverWidth),
+            label.leadingAnchor.constraint(equalTo: host.leadingAnchor, constant: 12),
+            label.trailingAnchor.constraint(equalTo: host.trailingAnchor, constant: -12),
+            label.topAnchor.constraint(equalTo: host.topAnchor, constant: 10),
+            label.bottomAnchor.constraint(equalTo: host.bottomAnchor, constant: -10),
+        ])
+        let controller = NSViewController()
+        controller.view = host
+        let popover = NSPopover()
+        popover.behavior = .transient
+        popover.contentViewController = controller
+        popover.show(relativeTo: anchor.bounds, of: anchor, preferredEdge: .maxY)
+        self.popover = popover
     }
 
     @objc private func rowDoubleClicked() {
@@ -366,10 +487,7 @@ final class LauncherSettingsView: NSView, NSTableViewDataSource, NSTableViewDele
         guard let id = sender.identifier?.rawValue,
             let index = modes.firstIndex(where: { $0.target?.id == id })
         else { return }
-        modes = Launcher.sanitized(Launcher.removing(modes, at: index))
-        reload()
-        source = onChange(modes)
-        refreshSourceLine()
+        commit(Launcher.removing(modes, at: index))
     }
 
     @objc private func addTapped() {
@@ -559,7 +677,15 @@ final class LauncherSettingsView: NSView, NSTableViewDataSource, NSTableViewDele
                 LauncherOption(
                     key: $0.keyField.stringValue, value: $0.valueField.stringValue,
                     label: $0.labelField.stringValue, isEnabled: $0.enabledBox.state == .on)
-            })
+            },
+            // The tick box belongs to the row, not to this sheet, so the draft
+            // carries the mode's own value through instead of inventing one.
+            isEnabled: editingIsEnabled)
+    }
+
+    /// Whether the mode behind the sheet is ticked. A mode being added is.
+    private var editingIsEnabled: Bool {
+        editingIndex.flatMap { modes.indices.contains($0) ? modes[$0].isEnabled : nil } ?? true
     }
 
     private func showIssues(_ issues: [Launcher.DraftIssue]) {
@@ -653,10 +779,7 @@ final class LauncherSettingsView: NSView, NSTableViewDataSource, NSTableViewDele
         } else {
             next = Launcher.inserting(next, .target(target), at: next.count)
         }
-        modes = Launcher.sanitized(next)
-        reload()
-        source = onChange(modes)
-        refreshSourceLine()
+        commit(next)
         closeSheet()
     }
 
@@ -741,11 +864,6 @@ private final class SheetOptionRow {
         stack.addArrangedSubview(enabledBox)
         stack.addArrangedSubview(removeButton)
     }
-}
-
-/// Top-left origin, so a short document sits at the top of its scroll view.
-private final class LauncherDocumentView: NSView {
-    override var isFlipped: Bool { true }
 }
 
 /// A pill whose background is resolved per drawing, so light and dark mode each

@@ -266,6 +266,7 @@ A 线（通道，对应 R1）与 B 线（面板与声明式插件，对应 R2/R3
 | P3a | B | launcher section + DeepSeek URL 模板 + compose 输入（**已实施**，issue `overlay-launcher-compose`） | 悬浮窗输入一句话 → 浏览器打开 `chat.deepseek.com/?q=…`（`autosend` 默认不带） |
 | P3b | B | 多目标启动器（**已实施**，issue `launcher-targets`）：目标清单走 `ISLAND_LAUNCHER_TARGETS`，compose 态 `⇥` 循环目标；声明式 manifest（`plugin.json` 解析 + 启用/禁用 + `targets` 字段）**未做** | `ISLAND_LAUNCHER_TARGETS` 设两条目标后 `--print-config` 的 launcher 行列出两个名字，`⇥` 可切换；`make verify` 全绿 |
 | P3c | B | 模式环可配（**已实施**，issue `launcher-modes`）：设置页 → 启动器（拖拽排序 / 增删改 / 逐模式附加参数开关）+ `UserDefaults` 载体 + `⇥` 走环；声明式 manifest（`plugin.json` 解析 + 启用/禁用 + `targets` 字段）**仍未做** | 设置页拖到一个自定义模式排第一，重启后 `⇥` 顺序与之一致；给 DeepSeek 勾上「自动发送」后 URL 带 `autosend=1`；`make verify` 全绿 |
+| P3d | B | 模式可停用 + 内置 Kimi + 设置页文案与滚动（**已实施**，issue `launcher-mode-toggles`）：每行末尾启用勾选框（`LauncherTarget.isEnabled`），`Tab` 只走勾选的行、落点是第一个勾选的行；Kimi 按 `.cn` 深链内置；长文案拆成一句说明 + ⓘ（页面级=配置方法，行内=站点限制）；列表滚动而「添加模式…」固定底部；按键提示由 `⇥` 改成 `Tab 键`；声明式 manifest **仍未做** | 取消勾选 Kimi 后 `Tab` 从「搜索任务」直接到 DeepSeek、`--print-config` 打出 `Kimi (off)`；内置三行 `↩` 各打开正确网址；`make verify` 全绿 |
 | P4 | B（依赖 P0/P1） | 进程插件（回连 socket）+ 双向请求帧 + 多全局键 + 已安装智能体探测 | 插件按 id 收事件并能被 island 反向调用；同进程注册 3 键全成功；探测结果与本机实际装机一致 |
 
 P0 为什么不先用文件收件箱：CLI 与协议编解码两边都要写，文件版会让传输层写两遍。文件收件箱保留为"主方案不可用时"的兜底，不单独做一期。`[推断:]` 中
@@ -279,6 +280,8 @@ P3a 落地后补充（issue `overlay-launcher-compose`，2026-10-18 用户选定
 P3b 落地后补充（issue `launcher-targets`，2026-10-18）：开工前由用户回答三个问题，结论是**载体用 `ISLAND_LAUNCHER_TARGETS` 环境变量**（D13）、**compose 态按 `⇥` 循环目标**、**本轮不加 Kimi**。于是"多目标可选可配"落地了，载体不是 manifest：`LauncherTarget` 的四种字段照旧，清单解析、非法条目跳过、`⇥` 循环与开关优先级都在 `IslandCore`（100% 覆盖），AppKit 只渲染当前目标并 `NSWorkspace.open`。只有一个目标时 `⇥` 仍是"退回筛选"，与 P3a 等价。§4.4 的 `targets` 字段与 §4.8 的 manifest 边界都未改动；**声明式 manifest（`plugin.json` 解析 + 启用/禁用 + 字段校验）仍是 P3b 未做的部分，需另开 issue**。
 
 P3c 落地后补充（issue `launcher-modes`，2026-10-18）：把"筛选 / 提问"两态泛化成**有序模式环**（`LauncherMode = 搜索任务 | 网页提问`），`⇥` 恒为"下一站并回绕"，**第一行就是热键召唤后直接进入的模式**（用户选定），`搜索任务` 恒在环里、可拖不可删（`esc` 的取消去处）。载体从"仅环境变量"扩到**设置页（`UserDefaults` 的 `IslandLauncherModes`，JSON）+ 环境变量 + 内置**，优先级 `ISLAND_LAUNCHER=off` > 设置页 > `ISLAND_LAUNCHER_TARGETS` > 内置（D14，与 `CONTEXT.md` 的"应用内设置 > 环境变量"一致；D13 只被扩展、未被推翻——环境变量通道与格式原样保留）。每个模式可挂**任意个可勾选的附加参数**（`LauncherOption`：键 / 值 / 用户起的标签 / 是否启用），DeepSeek 内置一个**默认不勾**的 `autosend=1`（标签「自动发送」）；这取代了 §4.6 的"默认只带 `q`"一刀切，D9 的"要给就给显式开关、默认不带"不变。**Kimi 不内置**：旧域名 `kimi.moonshot.cn/_prefill_chat?prefill_prompt=…&send_immediately=true` 现在只 302 到 `www.kimi.com/_prefill_chat`，而当前 `kimi-web-seo` bundle 里该路由是 `{path:'/_prefill_chat', redirect:'home'}`（参数被丢弃），`send_immediately` **0 命中** —— 旧域名的能力在新域名已不存在，属"未知能否支持"，按用户"只内置已知能支持的部分"的裁决不内置，交给自定义模式。§4.4 的 `targets` 字段与 §4.8 的 manifest 边界仍不变。
+
+P3d 落地后补充（issue `launcher-mode-toggles`，2026-10-19）：人验收 P3c 后提了五件事，其中两件是缺陷级的。① **模式可停用**：每行末尾一个启用勾选框，落在 `LauncherTarget.isEnabled`（`LauncherMode.isEnabled` 对筛选恒为 true —— 它是 island 自己的功能，`esc` 与任务列表都依赖它，所以"一个都没勾"的状态不存在），D14 的"第一行即入口"随之修订为"第一个勾选的行即入口"（`Launcher.summonIndex`），`Tab` 只走勾选的行。② **Kimi 内置**：人 2026-10-19 在本机浏览器实测 `https://kimi.moonshot.cn/_prefill_chat?prefill_prompt=测试&send_immediately=true` **可以使用**；P3c 的"不内置"判断来自 `www.kimi.com` 新域名（302 + `{path:'/_prefill_chat', redirect:'home'}` + `send_immediately` 0 命中），两个域名是两条路，故按 `.cn` 结果修订（D15）。③ 设置页文案与布局：一句短说明 + 页面级 ⓘ（配置方法）+ 行内 ⓘ（站点限制，只给内置站点），列表区域滚动而「添加模式…」固定在列表下方。④ 按键提示统一成 `Tab 键`。⑤ 人现场 `UserDefaults` 里 `IslandLauncherModes` 有残留（探测写入的 Kimi 环：`www.kimi.com` + 无 options + `searchTasks` 在后），保存值优先于内置，于是 DeepSeek 被顶掉；已备份后删除该键，教训写进 `CONTEXT.md` § Gotchas（探针不要写真实域）。
 
 ---
 
@@ -314,6 +317,7 @@ P3c 落地后补充（issue `launcher-modes`，2026-10-18）：把"筛选 / 提�
 | D12 | token（D5）何时做 | 暂缓，先不做；P0/P1 靠同 uid + 0700/0600 + 方法白名单 | P1 去掉 token 与设置界面入口；同用户进程可发通知、可 `query tasks`，这是已知缺口 |
 | D13 | P3b 目标清单的载体（2026-10-18 实施时由用户选定） | `ISLAND_LAUNCHER_TARGETS` 环境变量：`id\|显示名\|站点基址\|查询参数`，`;` 分隔，非法条目跳过；`ISLAND_LAUNCHER=off` 仍整体关闭且优先 | P3b 只做环境变量载体，不创建 `plugins/` 目录；§4.4 的 `targets` 字段与 §4.8 的 manifest 边界都不变，manifest 另开 issue |
 | D14 | P3c 模式环的载体、顺序语义与 `autosend`（2026-10-18 实施时由用户选定） | ① 模式环由**设置页**配置，存 `UserDefaults` 的 `IslandLauncherModes`（JSON），优先级 `ISLAND_LAUNCHER=off` > 设置页 > `ISLAND_LAUNCHER_TARGETS` > 内置；② **第一行即热键召唤后直接进入的模式**，`搜索任务` 恒在环里可拖不可删；③ 附加参数逐模式**显式勾选、默认全不勾**（DeepSeek 预置 `autosend=1`，标签「自动发送」）；④ 只内置**已知能支持**的目标，即 DeepSeek 一条，Kimi 走自定义 | 扩展 D13 而不推翻它（环境变量通道与格式原样保留，仍是开发者覆盖通道）；D9"默认不带"不变，只是从"一刀切"变成"逐模式开关"；不引入配置文件，仍走 `UserDefaults`（§4.8）；`autosend` 从"永不出现"变成"用户勾了才出现" |
+| D15 | P3d 的启用开关、内置 Kimi 与设置页文案（2026-10-19 人验收 P3c 时提出） | ① 每个模式行末尾一个启用勾选框，存 `LauncherTarget.isEnabled`（旧数据缺该字段读作启用），`Tab` 只走勾选的行，召唤落点改成"第一个勾选的行"；`搜索任务` 恒为勾选且置灰，不可停用；② 内置环 = `搜索任务` + DeepSeek + Kimi，Kimi 用 `.cn` 深链 `kimi.moonshot.cn/_prefill_chat?prefill_prompt=…`，附加参数 `send_immediately=true`（默认不勾）；③ 设置页长文案拆成一句说明 + ⓘ 详情（页面级 = 配置方法，行内 = 站点限制）；④ 列表滚动，「添加模式…」固定底部；⑤ 按键提示写 `Tab 键`，不再只给 `⇥` 符号 | 修订 D14 ①②④（顺序语义、内置清单），D14 ③（附加参数默认不勾）不变；不新增配置载体、不加依赖、不改 URL 构造 |
 
 ---
 
@@ -326,7 +330,7 @@ P3c 落地后补充（issue `launcher-modes`，2026-10-18）：把"筛选 / 提�
 | Developer ID + hardened runtime 下 UDS 仍可用 | 在**有 Developer ID 身份的机器**上用 `ISLAND_SIGN_IDENTITY` 构建一次并重跑 `.build/probe/ipc/run_all.sh`（本机 `security find-identity -v -p codesigning` 为 `0 valid identities found`，做不了） |
 | 0600 socket 拒绝其他本机用户 | 建第二个账号，`su` 过去 `nc -U` 试探 |
 | DeepSeek `?q=` / `autosend=1` 端到端生效 | **已实测（2026-10-18，用户在本机浏览器）**：`https://chat.deepseek.com/?q=测试&autosend=1` 可以自动触发问答。站点生产 bundle 里的实现（`open_in_deepseek` 埋点、`q`/`prompt` 白名单、`autosend=1 && length<=800`、仅站点根路径、需已登录）见 `launcher-modes.md` §2.1 |
-| Kimi 是否支持带参预填/自动发送 | 旧域名 `kimi.moonshot.cn/_prefill_chat?prefill_prompt=…&send_immediately=true` 现在只 302 到 `www.kimi.com/_prefill_chat`，而当前 bundle 里该路由是 `{path:'/_prefill_chat', redirect:'home'}`、`send_immediately` 0 命中。仍缺一次**已登录浏览器**的实测才能说死（匿名 HTTP 路径已确认不支持） |
+| Kimi 是否支持带参预填/自动发送 | **已实测（2026-10-19，用户在本机浏览器）**：`https://kimi.moonshot.cn/_prefill_chat?prefill_prompt=测试&send_immediately=true` 可以使用，于是 P3d 按 `.cn` 域名内置。注意 `www.kimi.com` 是另一条路：旧深链 302 到该域名，而现 `kimi-web-seo` bundle 里该路由是 `{path:'/_prefill_chat', redirect:'home'}`、`send_immediately` 0 命中（2026-10-18 静态读取）。仍未实测：`.cn` 未登录时是否只预填不发送 |
 | 跨 app 热键冲突时按键投递给谁 | 需辅助功能授权投递真实按键（本机 `AXIsProcessTrusted()==false`） |
 | 拼音输入法下 compose 提交行为 | 切到简体拼音，输入并回车 |
 | 插件子进程的 TCC 归属、quarantine 二进制能否 spawn | 各起一次带 quarantine 属性的子进程观察 |

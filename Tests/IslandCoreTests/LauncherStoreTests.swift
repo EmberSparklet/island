@@ -43,6 +43,46 @@ final class LauncherStoreTests: XCTestCase {
         XCTAssertEqual(store.load(), [.searchTasks, .target(deepSeek)])
     }
 
+    /// The enable box arrived after the ring did. A saved ring has no such field,
+    /// and it must read as ticked — an upgrade may not silently reset what the
+    /// user configured.
+    ///
+    /// Built with `JSONSerialization` rather than by string-editing what the
+    /// encoder just wrote: `JSONEncoder` emits keys in hash order, not declaration
+    /// order, so a `replacingOccurrences` on its output is a coin flip.
+    func testATargetSavedWithoutTheToggleReadsAsTicked() throws {
+        let target: [String: Any] = [
+            "id": "kimi", "name": "Kimi", "baseURL": "https://www.kimi.com/",
+            "queryItem": "q", "options": [Any](),
+        ]
+        let ring: [[String: Any]] = [
+            ["kind": "target", "target": target], ["kind": "searchTasks"],
+        ]
+        defaults.set(
+            try JSONSerialization.data(withJSONObject: ring),
+            forKey: UserDefaultsLauncherStore.key)
+
+        let loaded = try XCTUnwrap(store.load())
+        XCTAssertEqual(loaded.map(\.name), ["Kimi", L10n.current.text(.searchTasks)])
+        XCTAssertEqual(loaded.map(\.isEnabled), [true, true])
+        XCTAssertFalse(store.hasUnreadableValue)
+    }
+
+    func testAnUntickedModeSurvivesARoundTrip() {
+        let ring = Launcher.settingEnabled(
+            false, at: 1, in: [.searchTasks, .target(kimi), .target(Launcher.deepSeek)])
+        store.save(ring)
+        XCTAssertEqual(store.load(), ring)
+        XCTAssertEqual(store.load()?.map(\.isEnabled), [true, false, true])
+    }
+
+    func testTheToggleIsReadableInTheStoredJSON() throws {
+        store.save(Launcher.settingEnabled(false, at: 1, in: [.searchTasks, .target(kimi)]))
+        let data = try XCTUnwrap(defaults.data(forKey: UserDefaultsLauncherStore.key))
+        let text = try XCTUnwrap(String(data: data, encoding: .utf8))
+        XCTAssertTrue(text.contains("\"isEnabled\":false"), text)
+    }
+
     /// The ring is stored as JSON, so its shape can be read back in a bug report.
     func testTheRingIsStoredAsReadableJSON() throws {
         store.save([.searchTasks, .target(kimi)])

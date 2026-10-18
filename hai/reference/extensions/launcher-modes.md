@@ -267,6 +267,22 @@ public enum LauncherMode: Equatable, Sendable {
 | **DeepSeek 预填 + 自动发送** | **已实测（2026-10-18，用户在本机已登录浏览器）**：`https://chat.deepseek.com/?q=测试&autosend=1` 可以自动触发问答。仍未被机器复现的原因是 TCC `-25211` 挡 GUI 自动化 |
 | DeepSeek 800 字上限 | 999 字的问题 + `autosend=1`，看是否只填不发（代码路径已确认，未单独实测） |
 | DeepSeek 非根路径 | 代码里的 JS 解释了老的「按 table 回车没反应」现象：**只在根路径生效**，所以基址必须填 `https://chat.deepseek.com/`，不能带子路径 |
-| Kimi 新域名是否仍实现 `_prefill_chat` | 匿名 HTTP 路径已确认不支持：旧域名只 302 到 `www.kimi.com/_prefill_chat`，而当前 `kimi-web-seo` bundle 里该路由是 `{path:'/_prefill_chat', redirect:'home'}`（参数被丢弃），`send_immediately` 0 命中。仍缺**已登录浏览器**那一次实测 |
+| Kimi 是否仍实现 `_prefill_chat` | **已实测（2026-10-19，用户在本机浏览器）**：`https://kimi.moonshot.cn/_prefill_chat?prefill_prompt=测试&send_immediately=true` 可以使用 → P3d 按 `.cn` 域名内置。`www.kimi.com` 那条路仍是不支持的：旧深链 302 到该域名，现 `kimi-web-seo` bundle 里 `{path:'/_prefill_chat', redirect:'home'}`、`send_immediately` 0 命中（匿名 HTTP 路径，2026-10-18） |
 | ChatGPT / Codex 网页 | 本机区域与 DNS 阻挡（README §2.3 已记）；且 ChatGPT 的自动发送已被官方 `sec-fetch-site` 防护关掉 |
 | 真人按键下的模式环 | TCC `-25211` 挡自动化，只能人工按 |
+
+---
+
+## 8. P3d 落地后的变化（2026-10-19）
+
+人验收 P3c 后提了五条，本稿的以下结论随之修订；其余章节仍按原文理解（`⇥` 一律读作 `Tab 键`）。
+
+| 本稿原文 | P3d 修订 |
+|---|---|
+| §3.2「第一行就是召唤后直接进入的模式」 | 每行末尾一个**启用勾选框**（`LauncherTarget.isEnabled`），`Tab` 只走勾选的行，落点 = **第一个勾选的行**（`Launcher.summonIndex`）。`搜索任务` 恒为勾选且置灰不可停用，所以"一个都没勾"的状态不存在 |
+| §3.5 footer `↩ 发送到 X   ⇥ 切换模式` | 文案改为 `Tab 键 切换模式`；勾选的行只剩一个时退化成 `↩ 发送到 X   esc 取消`（不再出现按了没用的提示） |
+| §2.2 Kimi 一行「新域名不支持 → 不内置」 | **内置**，按人实测的 `.cn` 深链：基址 `kimi.moonshot.cn/_prefill_chat`、问题参数 `prefill_prompt`、附加参数 `send_immediately=true`（标签「自动发送」，默认不勾）。两个域名是两条路 |
+| §3.4 设置页「一段脚注」 | 拆成：页面级 ⓘ（配置方法 `launcherHowTo`）+ 一句短说明（`launcherSettingsFootnote`，含 `Tab 键`）+ 行内 ⓘ（只给内置站点，`Launcher.detail(for:)` → `launcherDetailDeepSeek` / `launcherDetailKimi`） |
+| §3.4 布局「整页一个 scroll view，表格全高」 | 改成：说明/来源行固定 → 列表区域自己滚动 → 「添加模式…」按钮固定在该区域下方，不随内容滚动 |
+
+`--print-config` 的 launcher 行会给未勾选的行加 `(off)`，便于在没有 GUI 的情况下核对。

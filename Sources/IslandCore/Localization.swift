@@ -49,10 +49,16 @@ public enum TextKey: String, CaseIterable, Sendable {
     case overlayHintsWithLauncher
     case launcherAsk
     case launcherHintsNextMode
+    case launcherHintsCompose
     case launcherKindWeb
     case launcherDefault
     case tabLauncher
     case launcherSettingsFootnote
+    case launcherInfo
+    case launcherHowTo
+    case launcherAlwaysOn
+    case launcherDetailDeepSeek
+    case launcherDetailKimi
     case launcherAdd
     case launcherEdit
     case launcherDelete
@@ -298,14 +304,24 @@ extension Localizer {
         .searchOneTask: "Search 1 task",
         .searchManyTasks: "Search %d tasks",
         .overlayHints: "↑↓ move   ↩ open   ⌘1–9 jump   ⌘, settings   esc close",
-        .overlayHintsWithLauncher: "↑↓ move   ↩ open   ⇥ ask   ⌘1–9 jump   ⌘, settings   esc close",
+        .overlayHintsWithLauncher:
+            "↑↓ move   ↩ open   Tab ask   ⌘1–9 jump   ⌘, settings   esc close",
         .launcherAsk: "Ask %@…",
-        .launcherHintsNextMode: "↩ send to %@   ⇥ next mode   esc cancel",
+        .launcherHintsNextMode: "↩ send to %@   Tab next mode   esc cancel",
+        .launcherHintsCompose: "↩ send to %@   esc cancel",
         .launcherKindWeb: "Web ask",
         .launcherDefault: "default",
         .tabLauncher: "Launcher",
         .launcherSettingsFootnote:
-            "One mode per row, walked with ⇥; the first row is the mode the overlay opens in. Search tasks cannot be removed. An extra parameter only reaches the URL once it is ticked. DeepSeek needs a question of at most 800 characters to send it, a signed-in session, and the site root.",
+            "Drag to reorder. The first ticked row is the mode the hotkey opens; Tab walks the ticked rows.",
+        .launcherInfo: "Details",
+        .launcherHowTo:
+            "To add a site: ask it a question in the browser. The parameter in the address bar that carries the question is the Question parameter. Other parameters go in the list below, and only reach the URL once ticked.",
+        .launcherAlwaysOn: "\"Search tasks\" is always available",
+        .launcherDetailDeepSeek:
+            "Sends the question on its own only on the site root, in a signed-in session, and at 800 characters or less.",
+        .launcherDetailKimi:
+            "Auto-send works on the kimi.moonshot.cn prefill link; the session must be signed in.",
         .launcherAdd: "Add mode…",
         .launcherEdit: "Edit",
         .launcherDelete: "Delete",
@@ -477,14 +493,20 @@ extension Localizer {
         .searchOneTask: "搜索 1 个任务",
         .searchManyTasks: "搜索 %d 个任务",
         .overlayHints: "↑↓ 选择   ↩ 打开   ⌘1–9 直达   ⌘, 设置   esc 关闭",
-        .overlayHintsWithLauncher: "↑↓ 选择   ↩ 打开   ⇥ 提问   ⌘1–9 直达   ⌘, 设置   esc 关闭",
+        .overlayHintsWithLauncher: "↑↓ 选择   ↩ 打开   Tab 键 提问   ⌘1–9 直达   ⌘, 设置   esc 关闭",
         .launcherAsk: "问 %@…",
-        .launcherHintsNextMode: "↩ 发送到 %@   ⇥ 切换模式   esc 取消",
+        .launcherHintsNextMode: "↩ 发送到 %@   Tab 键 切换模式   esc 取消",
+        .launcherHintsCompose: "↩ 发送到 %@   esc 取消",
         .launcherKindWeb: "网页提问",
         .launcherDefault: "默认",
         .tabLauncher: "启动器",
-        .launcherSettingsFootnote:
-            "一行一个模式，用 ⇥ 依次经过；第一行就是召唤后直接进入的模式。「搜索任务」不可删除。附加参数只有勾选后才写进网址。DeepSeek 的「自动发送」要求问题不超过 800 字、已登录，且只在站点根路径生效。",
+        .launcherSettingsFootnote: "拖拽排序。第一个勾选的行是召唤后进入的模式，Tab 键在勾选的行之间切换。",
+        .launcherInfo: "详情",
+        .launcherHowTo:
+            "添加站点：在浏览器里向该站点提一个问题。地址栏里承载问题的那个参数名，就是「问题参数」。其他参数写在下面，勾选后才写进网址。",
+        .launcherAlwaysOn: "「搜索任务」始终可用",
+        .launcherDetailDeepSeek: "只在站点根路径、已登录、问题不超过 800 字时才自动发送。",
+        .launcherDetailKimi: "自动发送在 kimi.moonshot.cn 的预填链接上有效，需要已登录。",
         .launcherAdd: "添加模式…",
         .launcherEdit: "编辑",
         .launcherDelete: "删除",
