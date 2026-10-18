@@ -21,6 +21,11 @@ final class OverlayContentView: NSView, NSTextFieldDelegate {
     private static let padding: CGFloat = 10
     private static let sectionGap: CGFloat = 8
     private static let sectionHeaderHeight: CGFloat = 26
+    /// How many notification rows fit before the list scrolls. The panel height
+    /// is capped by this, not by the screen.
+    private static let maxVisibleNotifications: CGFloat = 8
+    private static let maxListHeight: CGFloat =
+        sectionGap + sectionHeaderHeight + maxVisibleNotifications * notificationRowHeight
     /// Bottom inset under the footer; the footer's own height already gives
     /// its text room, so it sits closer to the edge than the rows would.
     private static let footerInset: CGFloat = 4
@@ -59,8 +64,8 @@ final class OverlayContentView: NSView, NSTextFieldDelegate {
     private let searchField = NSTextField()
     private let newPill = KeycapView()
     private let hotkeyCap = KeycapView()
-    /// Tasks and notifications scroll together; the panel never grows past the
-    /// screen (see `maxListHeight`).
+    /// Tasks and notifications scroll together; the panel never grows past
+    /// `maxListHeight`.
     private let scrollView = NSScrollView()
     private let document = FlippedDocumentView()
     private let list = NSStackView()
@@ -102,14 +107,10 @@ final class OverlayContentView: NSView, NSTextFieldDelegate {
         return height
     }
 
-    /// The list scrolls instead of pushing the panel off the screen.
+    /// The list scrolls instead of growing; the cap is a constant, not the
+    /// screen size.
     private var visibleListHeight: CGFloat {
-        min(listContentHeight, maxListHeight)
-    }
-
-    private var maxListHeight: CGFloat {
-        let screen = NSScreen.main?.visibleFrame.height ?? 900
-        return max(180, screen - Self.headerHeight - Self.footerHeight - Self.padding * 3 - 40)
+        min(listContentHeight, Self.maxListHeight)
     }
 
     func update(
