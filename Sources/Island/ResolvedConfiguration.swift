@@ -13,6 +13,7 @@ struct ResolvedConfiguration {
     let duration: OverlayDuration
     let taskLimit: Int
     let agentHome: URL
+    let ipc: IPCSettings
 
     init(environment: [String: String], store: HotkeyStoring = UserDefaultsHotkeyStore()) {
         hotkey = HotkeyConfiguration.resolve(
@@ -23,6 +24,7 @@ struct ResolvedConfiguration {
         duration = OverlayDuration.resolve(environment[Self.durationEnvironmentKey])
         taskLimit = TaskLimit.resolve(environment[Self.taskLimitEnvironmentKey])
         agentHome = AgentHome.resolve(environment[AgentHome.environmentKey])
+        ipc = IPCSettings.resolve(environment: environment)
     }
 
     var summary: String {
@@ -31,6 +33,7 @@ struct ResolvedConfiguration {
             "overlay duration  \(Self.secondsText(duration.seconds))s",
             "task limit        \(taskLimit)",
             "agent home        \(agentHome.path)",
+            "ipc socket        \(ipc.socketURL?.path ?? "off")",
         ]
         if hotkey.usedFallback {
             lines.append(

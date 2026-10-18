@@ -28,6 +28,10 @@ if arguments.contains("--help") || arguments.contains("-h") {
           ISLAND_OVERLAY_SECONDS=5        how long the pop-up stays on screen (settings override it)
           ISLAND_AGENT_HOME=~             where agent session stores are read from (e.g. demo data)
 
+        subcommands:
+          notify [--title <text>] [--kind notice|task.finished] [--client <name>]
+                                          tell a running island about a finished task
+
         flags (login-item flags must run from inside the app bundle):
           --print-config                  resolve the environment and exit
           --scan-agents                   list completed agent tasks and exit
@@ -43,6 +47,15 @@ if arguments.contains("--help") || arguments.contains("-h") {
         """
     )
     exit(EXIT_SUCCESS)
+}
+
+// `island notify` talks to the running instance over its socket; it needs no
+// app bundle and never starts one.
+if CommandLine.arguments.dropFirst().first == "notify" {
+    exit(
+        IPCCLI.runNotify(
+            Array(CommandLine.arguments.dropFirst(2)),
+            environment: ProcessInfo.processInfo.environment))
 }
 
 if arguments.contains("--login-item-status") {

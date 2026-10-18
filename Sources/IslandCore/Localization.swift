@@ -36,6 +36,9 @@ public enum TextKey: String, CaseIterable, Sendable {
     // Overlay
     case allCaughtUp
     case newCount
+    case noticeOne
+    case noticeMany
+    case noticeSource
     case nothingFinished
     case noMatches
     case searchTasks
@@ -250,6 +253,9 @@ extension Localizer {
     static let englishTexts: [TextKey: String] = [
         .allCaughtUp: "All caught up",
         .newCount: "%d new",
+        .noticeOne: "1 notice",
+        .noticeMany: "%d notices",
+        .noticeSource: "via %@",
         .nothingFinished: "Nothing has finished yet",
         .noMatches: "No matches",
         .searchTasks: "Search tasks",
@@ -389,6 +395,9 @@ extension Localizer {
     static let chineseTexts: [TextKey: String] = [
         .allCaughtUp: "全部已读",
         .newCount: "%d 条未读",
+        .noticeOne: "1 条外部通知",
+        .noticeMany: "%d 条外部通知",
+        .noticeSource: "来自 %@",
         .nothingFinished: "还没有任务完成",
         .noMatches: "没有匹配的任务",
         .searchTasks: "搜索任务",

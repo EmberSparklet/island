@@ -12,6 +12,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: StatusItemController?
     private var monitor: AgentMonitor?
     private var inbox: AgentInbox?
+    /// External notifications that arrived over IPC, kept apart from tasks.
+    private let externalInbox: ExternalInbox
+    private var ipcServer: IPCServer?
+    private let ipcSnapshot = IPCSnapshotStore()
     private var overlayContent: OverlayContentView?
     private var reopenExecutor: AgentReopenExecutor?
     /// Serial, so two quick clicks cannot interleave their tmux/AppleScript steps.
@@ -33,6 +37,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     init(configuration: ResolvedConfiguration) {
         self.configuration = configuration
+        externalInbox = ExternalInbox(limit: configuration.taskLimit)
         popup = popupStore.load(fallback: configuration.duration)
         scenarios = scenarioStore.load()
         super.init()
@@ -66,6 +71,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.settingsWindow?.show()
         }
         content.onSelect = { [weak self] entry in self?.selectTask(entry) }
+        content.onSelectNotification = { [weak self] id in self?.selectNotification(id: id) }
         content.onHoverChange = { [weak self] hovering in self?.setOverlayHovered(hovering) }
         content.onDismiss = { [weak self] in self?.hideOverlay(reason: "overlay dismissed") }
         content.onHeightChange = { [weak self] height in
@@ -129,6 +135,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         log("menu bar item installed; launch at login: \(LoginItemController().status.rawValue)")
 
         startAgentMonitor()
+        startIPC()
 
         updates.onChange = { [weak self] status in
             self?.settingsWindow?.updateStatusChanged()
@@ -173,6 +180,53 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    /// The inbound channel (P0): a Unix domain socket other processes use to
+    /// notify island. Failures are logged, never fatal — the app works without
+    /// it, and an already-running instance keeps the socket.
+    private func startIPC() {
+        let server = IPCServer(
+            settings: configuration.ipc,
+            inbox: externalInbox,
+            callbacks: IPCServer.Callbacks(
+                snapshot: { [store = ipcSnapshot] in store.read() },
+                onNotification: { [weak self] entry in
+                    DispatchQueue.main.async {
+                        MainActor.assumeIsolated { self?.externalNotificationArrived(entry) }
+                    }
+                },
+                log: { message in
+                    FileHandle.standardError.write(Data("[island] \(message)\n".utf8))
+                }
+            )
+        )
+        switch server.start() {
+        case .running:
+            break
+        case .alreadyRunning:
+            log("ipc: another island instance owns the socket")
+        case .disabled:
+            log("ipc is switched off (\(IPCSettings.environmentKey)=off)")
+        case .failed(let reason):
+            log("ipc failed: \(reason)")
+        }
+        ipcServer = server
+    }
+
+    /// A notification arrived: show it, and pop the overlay when the user asked
+    /// for pop-ups. Same passive path as a finished run — never steals focus.
+    private func externalNotificationArrived(_ entry: ExternalInbox.Entry) {
+        refreshAgentUI()
+        log("notification from \(entry.client): \(entry.title)")
+        if popup.isEnabled { showOverlay() }
+    }
+
+    /// D11: clicking an external notification only marks it read; its action
+    /// waits for the launcher (P3).
+    private func selectNotification(id: String) {
+        externalInbox.markRead(id: id)
+        refreshAgentUI()
+    }
+
     /// Which of `tasks` the user is looking at: the frontmost app is read here,
     /// on the main thread; the shelling out happens on `visibilityQueue`.
     private func tasksInView(_ tasks: [AgentTask]) async -> Set<String> {
@@ -198,9 +252,36 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         overlayContent?.update(
             entries: entries,
             unread: inbox.unreadCount,
-            hotkey: settings?.current ?? configuration.hotkey.spec
+            hotkey: settings?.current ?? configuration.hotkey.spec,
+            notifications: externalInbox.visibleEntries
         )
+        // What a `query` from the socket reports, captured on the main thread.
+        ipcSnapshot.update(
+            IPCSnapshot(
+                appVersion: Self.appVersion,
+                unreadTasks: inbox.unreadCount,
+                tasks: inbox.allEntries.map { entry in
+                    IPCSnapshot.Task(
+                        id: entry.id,
+                        agent: entry.task.agent.rawValue,
+                        title: entry.task.title,
+                        cwd: entry.task.cwd,
+                        completedAt: entry.task.completedAt,
+                        host: Self.hostText(entry.task.host))
+                }))
         log("agent tasks: \(inbox.unreadCount) unread, \(inbox.allEntries.count) tracked")
+    }
+
+    private static func hostText(_ host: AgentHost) -> String {
+        switch host {
+        case .terminal(let processID): return "terminal:\(processID)"
+        case .desktop(let bundleID): return "desktop:\(bundleID)"
+        case .unknown: return "unknown"
+        }
+    }
+
+    private static var appVersion: String {
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.0.0"
     }
 
     // MARK: - Task selection
@@ -416,6 +497,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         for line in configuration.summary.split(separator: "\n") {
             log(String(line))
         }
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        // Normal quit removes the socket file so the next launch binds cleanly.
+        ipcServer?.stop()
     }
 
     /// `26.6.2`, not the `Version 26.6.2 (Build …)` of `operatingSystemVersionString`.

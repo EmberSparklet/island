@@ -14,9 +14,12 @@ import IslandCore
 final class OverlayContentView: NSView, NSTextFieldDelegate {
     static let width: CGFloat = 520
     static let rowHeight: CGFloat = 52
+    /// External notifications are a separate, shorter section (decision D11).
+    static let notificationRowHeight: CGFloat = 44
     private static let headerHeight: CGFloat = 40
     private static let footerHeight: CGFloat = 28
     private static let padding: CGFloat = 10
+    private static let sectionGap: CGFloat = 8
     /// Bottom inset under the footer; the footer's own height already gives
     /// its text room, so it sits closer to the edge than the rows would.
     private static let footerInset: CGFloat = 4
@@ -26,6 +29,8 @@ final class OverlayContentView: NSView, NSTextFieldDelegate {
     var onDismiss: (() -> Void)?
     /// ⌘, in keyboard mode.
     var onOpenSettings: (() -> Void)?
+    /// A row in the external-notification section was clicked: mark it read.
+    var onSelectNotification: ((String) -> Void)?
     /// The row count changed (typing filters the list), so the panel resizes.
     var onHeightChange: ((CGFloat) -> Void)?
 
@@ -33,6 +38,7 @@ final class OverlayContentView: NSView, NSTextFieldDelegate {
     private var palette = OverlayTheme.fallback.palette(systemIsDark: false)
     private var selection = OverlaySelection(entries: [])
     private var unread = 0
+    private var notifications: [ExternalInbox.Entry] = []
     private var hotkey: HotkeySpec?
     private var isKeyboardMode = false
     private(set) var showsHints = true
@@ -48,6 +54,7 @@ final class OverlayContentView: NSView, NSTextFieldDelegate {
     private let spacer = NSView()
     private let searchIcon = NSImageView()
     private let searchField = NSTextField()
+    private let noticePill = KeycapView()
     private let newPill = KeycapView()
     private let hotkeyCap = KeycapView()
     private let list = NSStackView()
@@ -72,12 +79,20 @@ final class OverlayContentView: NSView, NSTextFieldDelegate {
     var preferredHeight: CGFloat {
         let rows = max(selection.rows.count, 1)
         let bottom = showsFooter ? Self.footerHeight + Self.footerInset : Self.padding
-        return Self.padding + Self.headerHeight + CGFloat(rows) * Self.rowHeight + bottom
+        let notices =
+            notifications.isEmpty
+            ? 0
+            : Self.sectionGap + CGFloat(notifications.count) * Self.notificationRowHeight
+        return Self.padding + Self.headerHeight + CGFloat(rows) * Self.rowHeight + notices + bottom
     }
 
-    func update(entries: [AgentInbox.Entry], unread: Int, hotkey: HotkeySpec) {
+    func update(
+        entries: [AgentInbox.Entry], unread: Int, hotkey: HotkeySpec,
+        notifications: [ExternalInbox.Entry]
+    ) {
         self.unread = unread
         self.hotkey = hotkey
+        self.notifications = notifications
         selection.setEntries(entries)
         render()
     }
@@ -129,6 +144,19 @@ final class OverlayContentView: NSView, NSTextFieldDelegate {
             }
         }
 
+        for (index, entry) in notifications.enumerated() {
+            let row = OverlayNotificationRowView(entry: entry, palette: palette)
+            row.onClick = { [weak self] id in self?.onSelectNotification?(id) }
+            if index == 0, let previous = list.arrangedSubviews.last {
+                list.setCustomSpacing(Self.sectionGap, after: previous)
+            }
+            list.addArrangedSubview(row)
+            NSLayoutConstraint.activate([
+                row.widthAnchor.constraint(equalTo: list.widthAnchor),
+                row.heightAnchor.constraint(equalToConstant: Self.notificationRowHeight),
+            ])
+        }
+
         refreshHighlight()
         refreshHeader()
         onHeightChange?(preferredHeight)
@@ -151,6 +179,10 @@ final class OverlayContentView: NSView, NSTextFieldDelegate {
             label.centerXAnchor.constraint(equalTo: empty.centerXAnchor),
             label.centerYAnchor.constraint(equalTo: empty.centerYAnchor),
         ])
+    }
+
+    private static func noticeText(_ count: Int) -> String {
+        count == 1 ? L10n.current.text(.noticeOne) : L10n.current.formatted(.noticeMany, count)
     }
 
     private func highlight(_ index: Int) {
@@ -184,6 +216,13 @@ final class OverlayContentView: NSView, NSTextFieldDelegate {
         newPill.set(
             text: text, textColor: NSColor(palette.accent),
             background: NSColor(palette.selectionBackground), fontSize: 11)
+        // The external-notification count is deliberately its own pill: those
+        // rows never mix with agent tasks.
+        let unreadNotices = notifications.lazy.filter { !$0.isRead }.count
+        noticePill.set(
+            text: Self.noticeText(unreadNotices), textColor: NSColor(palette.accent),
+            background: NSColor(palette.selectionBackground), fontSize: 11)
+        noticePill.isHidden = unreadNotices == 0
         let count = selection.rows.count
         let placeholder: String
         switch count {
@@ -280,7 +319,7 @@ final class OverlayContentView: NSView, NSTextFieldDelegate {
         status.font = .systemFont(ofSize: 13, weight: .semibold)
         spacer.setContentHuggingPriority(.defaultLow - 1, for: .horizontal)
         let header = NSStackView(views: [
-            dot, status, searchIcon, searchField, spacer, newPill, hotkeyCap,
+            dot, status, searchIcon, searchField, spacer, noticePill, newPill, hotkeyCap,
         ])
         header.orientation = .horizontal
         header.distribution = .fill
@@ -683,6 +722,114 @@ final class OverlayTaskRowView: NSView {
     override func mouseUp(with event: NSEvent) {
         guard bounds.contains(convert(event.locationInWindow, from: nil)) else { return }
         onClick?(entry)
+    }
+
+    override func resetCursorRects() {
+        addCursorRect(bounds, cursor: .pointingHand)
+    }
+}
+
+/// One external-notification row (IPC `notify`): a dot while unread, the
+/// title, where it came from, and how long ago. Clicking only marks it read —
+/// the actions a notification can trigger arrive with the launcher (P3).
+@MainActor
+final class OverlayNotificationRowView: NSView {
+    let entry: ExternalInbox.Entry
+    var onClick: ((String) -> Void)?
+
+    private let palette: OverlayPalette
+    private var trackingArea: NSTrackingArea?
+
+    init(entry: ExternalInbox.Entry, palette: OverlayPalette) {
+        self.entry = entry
+        self.palette = palette
+        super.init(frame: .zero)
+        wantsLayer = true
+        layer?.cornerRadius = 14
+        build()
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("OverlayNotificationRowView is created in code only")
+    }
+
+    private func build() {
+        let dot = NSView()
+        dot.wantsLayer = true
+        dot.layer?.cornerRadius = 4
+        dot.layer?.backgroundColor = NSColor(palette.accent).cgColor
+        dot.isHidden = entry.isRead
+        dot.translatesAutoresizingMaskIntoConstraints = false
+
+        let title = NSTextField(labelWithString: entry.title)
+        title.font = .systemFont(ofSize: 13, weight: entry.isRead ? .regular : .semibold)
+        title.textColor = NSColor(palette.title)
+        title.lineBreakMode = .byTruncatingTail
+        title.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+
+        let subtitle = NSTextField(
+            labelWithString: L10n.current.formatted(.noticeSource, entry.client))
+        subtitle.font = .systemFont(ofSize: 11)
+        subtitle.textColor = NSColor(palette.subtitle)
+        subtitle.lineBreakMode = .byTruncatingMiddle
+        subtitle.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+
+        let age = NSTextField(labelWithString: ShortAge.text(since: entry.receivedAt))
+        age.font = .monospacedDigitSystemFont(ofSize: 11, weight: .regular)
+        age.textColor = NSColor(palette.muted)
+        age.alignment = .right
+        age.setContentHuggingPriority(.required, for: .horizontal)
+        age.setContentCompressionResistancePriority(.required, for: .horizontal)
+
+        let text = NSStackView(views: [title, subtitle])
+        text.orientation = .vertical
+        text.alignment = .leading
+        text.spacing = 2
+        text.setContentHuggingPriority(.defaultLow, for: .horizontal)
+
+        let row = NSStackView(views: [dot, text, age])
+        row.orientation = .horizontal
+        row.distribution = .fill
+        row.alignment = .centerY
+        row.spacing = 10
+        row.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(row)
+
+        NSLayoutConstraint.activate([
+            title.widthAnchor.constraint(equalTo: text.widthAnchor),
+            subtitle.widthAnchor.constraint(equalTo: text.widthAnchor),
+            dot.widthAnchor.constraint(equalToConstant: 8),
+            dot.heightAnchor.constraint(equalToConstant: 8),
+            row.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 12),
+            row.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -14),
+            row.centerYAnchor.constraint(equalTo: centerYAnchor),
+        ])
+    }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if let trackingArea { removeTrackingArea(trackingArea) }
+        let area = NSTrackingArea(
+            rect: .zero,
+            options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect],
+            owner: self,
+            userInfo: nil
+        )
+        addTrackingArea(area)
+        trackingArea = area
+    }
+
+    override func mouseEntered(with event: NSEvent) {
+        layer?.backgroundColor = NSColor(palette.selectionBackground).cgColor
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        layer?.backgroundColor = NSColor.clear.cgColor
+    }
+
+    override func mouseUp(with event: NSEvent) {
+        guard bounds.contains(convert(event.locationInWindow, from: nil)) else { return }
+        onClick?(entry.id)
     }
 
     override func resetCursorRects() {

@@ -59,12 +59,15 @@ defaults delete com.commallama.island IslandHotkeyEnabled   # 回到默认开启
 | `ISLAND_OVERLAY_SECONDS` | `5` | 自动弹出的停留秒数，正数；被应用内设置（`IslandPopupSeconds`）覆盖 |
 | `ISLAND_TASK_LIMIT` | `10` | 悬浮窗展示的任务条数（PLAN § Design 里的 N），正数 |
 | `ISLAND_AGENT_HOME` | `~` | agent 数据根目录（`AgentHome`）。macOS 上改 `HOME` 无效（`homeDirectoryForCurrentUser` 不读环境变量），所以单独开这个口子 |
+| `ISLAND_IPC` | 开 | 入站通知通道开关；`off` / `0` / `false` / `no` 关闭。P0 默认开、无 token（token 属 P1） |
+| `ISLAND_IPC_PATH` | `~/Library/Application Support/island/ipc/island.sock` | socket 路径覆盖，测试与探针用 |
 
 ```bash
 ./build/Island.app/Contents/MacOS/Island --print-config   # 只解析并打印配置后退出，不开窗
 ./build/Island.app/Contents/MacOS/Island --scan-agents    # 列出本机检测到的所有已完成 agent run（调试用）
 ./build/Island.app/Contents/MacOS/Island --live-sessions  # 每个 agent 当前仍“开着”的 session（下拉框据此移除已关闭的行）
 ./build/Island.app/Contents/MacOS/Island --in-view <pid> [cwd]   # 此刻该 pid 的 tab 是否在用户眼前（先把宿主 app 切到前台再跑）
+./build/Island.app/Contents/MacOS/Island notify --title "Build finished"   # 通知正在运行的 island（也可写成 notify <title>）
 ./build/Island.app/Contents/MacOS/Island --help
 
 # 登录项（开机自启）：必须用 .app 包内的可执行文件调用
@@ -72,6 +75,8 @@ defaults delete com.commallama.island IslandHotkeyEnabled   # 回到默认开启
 ./build/Island.app/Contents/MacOS/Island --login-item-enable
 ./build/Island.app/Contents/MacOS/Island --login-item-disable
 ```
+
+`island notify` 走 Unix domain socket（`~/Library/Application Support/island/ipc/island.sock`），任何语言都能一行命令接入，也能直接用 `nc -U` 说协议（一行一个 JSON，先 `hello` 后 `notify` / `query`）。P0 的协议字段、错误码与安全模型见 `hai/reference/extensions/ipc.md`。
 
 快捷键语法：modifier 可写 `cmd`/`command`/`⌘`、`ctrl`/`control`/`⌃`、`opt`/`option`/`alt`/`⌥`、`shift`/`⇧`，用 `+` 连接；也接受 macOS 菜单里那种紧凑写法（`⌃⌘,`）。key 为 US 布局单字符或 `space`/`tab`/`return`/`escape`。**至少要有一个 modifier**（否则会全局吞掉那个键）。
 
@@ -95,7 +100,7 @@ defaults delete com.commallama.island IslandHotkeyEnabled   # 回到默认开启
 - 覆盖率：`./scripts/coverage.sh` 把**单行百分数**写进 `coverage.txt`；`make verify` 的 coverage gate 先刷新它，再与 `coverage-baseline.txt` 比对（当前基线 `100`，即 `IslandCore` 的全部可执行行都被覆盖）
 - 覆盖率排除项声明在 **`coverage.config`**（`llvm-cov -ignore-filename-regex`，一行一条正则），理由如下：
   1. `Tests/`、`(\.derived/runner|DerivedSources/test_entry_point)\.swift` —— 测试自身与 SwiftPM 自动生成的测试入口（AGENTS 排除类 1：自动生成的代码）。入口文件名的两种写法分别对应 `.derived` 布局与 Xcode 布局，都要排
-  2. `Sources/Island/*.swift`（逐文件列出，含 `StatusItemController.swift` / `LoginItemController.swift` / `IslandGlyph.swift` / `HotkeySettingsWindow.swift` / `AgentSettingsView.swift` / `HotkeyRecorderView.swift` / `AgentMonitor.swift` / `AgentReopenExecutor.swift` / `TerminalTabFocuser.swift` / `TaskVisibilityProbe.swift` / `ApplicationsMover.swift` / `Subprocess.swift` / `VSCodeExtensionInstaller.swift` / `ProcessSQLite.swift` / `ProcessInspector.swift` / `UpdateController.swift` / `UpdateSettingsView.swift` / `FeedbackSettingsView.swift`）—— 可执行 target 的全部内容，即 `main()` 与 AppKit / Carbon / ServiceManagement 的 wiring（AGENTS 排除类 2）。**该目录下新增文件必须显式加进 `coverage.config`**；任何决策逻辑都不该写在里面，应放 `IslandCore`
+  2. `Sources/Island/*.swift`（逐文件列出，含 `StatusItemController.swift` / `LoginItemController.swift` / `IslandGlyph.swift` / `HotkeySettingsWindow.swift` / `AgentSettingsView.swift` / `HotkeyRecorderView.swift` / `AgentMonitor.swift` / `AgentReopenExecutor.swift` / `TerminalTabFocuser.swift` / `TaskVisibilityProbe.swift` / `ApplicationsMover.swift` / `Subprocess.swift` / `VSCodeExtensionInstaller.swift` / `ProcessSQLite.swift` / `ProcessInspector.swift` / `UpdateController.swift` / `UpdateSettingsView.swift` / `FeedbackSettingsView.swift` / `IPCServer.swift` / `IPCClient.swift` / `UnixSocket.swift`）—— 可执行 target 的全部内容，即 `main()` 与 AppKit / Carbon / ServiceManagement 的 wiring（AGENTS 排除类 2）。**该目录下新增文件必须显式加进 `coverage.config`**；任何决策逻辑都不该写在里面，应放 `IslandCore`
   - 没有类 3（纯数据结构）、类 4（平台分支）的排除项
 - 增量覆盖率：本 repo 没有可用的 Swift delta-coverage 工具（`xcrun llvm-cov` 没有 diff 模式）。改动达到增量门槛时，用 `xcrun llvm-cov show` 人工核对改动行，并在 commit body 说明；`IslandCore` 的基线是 100%，任何新增未覆盖行都会在下次 `make verify` 里暴露
 
@@ -124,6 +129,10 @@ Sources/IslandCore/            # 纯逻辑，不 import 任何 UI 框架；被�
   TerminalFocus.swift          #   精确到 tab：tmux client 挑选、按宿主选定位手段（TerminalTabFocus）、AppleScript 文本、VS Code 请求/响应、扩展版本判断
   SessionPresence.swift        #   session 是否还开着：ProcessInspecting（注入的进程探测）+ SessionPresence（按 agent 的 live 集合，缺席即“无法判断”）+ AgentActivityScanner.presence
   AgentInbox.swift             #   增量入库 + 已读/未读 + 排序 + 条数上限（N）
+  IPCProtocol.swift           #   入站通知协议 v1：NDJSON 帧解析/编码、方法白名单、错误码
+  IPCSession.swift            #   单连接状态机（hello 必须先发）+ query 快照（IPCSnapshot / IPCSnapshotStore）
+  IPCSettings.swift           #   通道开关与 socket 路径（ISLAND_IPC / ISLAND_IPC_PATH）
+  ExternalInbox.swift         #   外部通知行：独立未读计数 + client_event_id 去重窗口（D11）
   OverlaySelection.swift       #   悬浮窗查询过滤（TaskFilter）+ 键盘选中行 / ⌘N / ↩ 标注
   OverlayShortcut.swift        #   悬浮窗键盘模式的 ⌘, / ⌘1–9 判定（全角→半角归一，兼容 CJK 输入源）
   OverlayTheme.swift           #   主题预设 → 配色（OverlayPalette）+ UserDefaults 存储 + agent 图标选择
@@ -157,6 +166,9 @@ Sources/Island/                # 可执行 target：NSApplication / NSPanel / Ca
   UpdateController.swift       #   拉 tap 的 cask 判断新版本（启动 / 每 6 小时 / 打开 settings）+ 执行升级
   UpdateSettingsView.swift     #   Settings → Updates
   FeedbackSettingsView.swift   #   Settings → Feedback
+  IPCServer.swift              #   UDS server：bind 认领流程、0700/0600 权限、每连接 DispatchSource 读、NDJSON 分帧
+  IPCClient.swift              #   `island notify` 客户端（hello + notify，2 秒超时）
+  UnixSocket.swift             #   posix socket 地址 / 写 / 读一行的公共封装
 Tests/IslandCoreTests/         # IslandCore 的行为测试（XCTest）
 assets/AppIcon.svg             # app 图标设计源；scripts/render-app-icon.sh 渲染成 assets/AppIcon.icns（提交），build-app.sh 拷进 Resources
 scripts/render-app-icon.sh     # SVG -> iconset（scripts/render-app-icon.swift，NSImage 渲染）-> iconutil -> .icns
@@ -170,7 +182,7 @@ scripts/check-layering.sh      # 依赖方向检查
 hai/reference/icon/            # 菜单栏图标与 app 图标的设计说明（SVG / 预览），非运行时依赖
 hai/reference/agents/          # MVP 调研：各 agent 的完成信号 / 任务身份 / 宿主 / 回到任务的手段
 hai/reference/workflow/        # 开发与发布流程：issue → agent 实现 → 本地验收 → publish.sh → brew
-hai/reference/extensions/      # 扩展机制方案（已确认，未实施）：入站通知 IPC / 插件 / 启动器，附三份一手调研
+hai/reference/extensions/      # 扩展机制方案：入站通知 IPC（P0 已实施）/ 插件 / 启动器，附三份一手调研
 vscode-extension/              # island 自带的 VS Code 扩展（纯 JS，零依赖）：按 pid 聚焦终端 tab；scripts/build-vscode-extension.sh 用系统 zip 打成 vsix，build-app.sh 放进 Resources
 scripts/build-vscode-extension.sh # 打 vsix（不需要 vsce / npm）
 coverage.config                # 覆盖率排除项
@@ -251,6 +263,7 @@ swift build                  # SwiftPM 自身拒绝 cyclic target dependency
 - **轮询路径上的大文件一律要缓存**：Claude Code 转录（`ClaudeTranscriptCache`，只读追加部分）、Claude 桌面版 blob（`ClaudeDesktopCacheReader`）、pi session（`PiScanCache`，按 mtime + size 判断变没变）。改文件属性要用 `FileManager.attributesOfItem`，不要用 `URL.resourceValues`，后者在同一个 URL 实例上会缓存旧值（issue `cache-pi-session-scans`：没缓存时 pi 每 3 秒全量解析约 6.7 MB，约 0.3s CPU）
 - **应用内升级**（issue `upgrade-n-feedback`）：版本真源是公开 tap 的 `Casks/island.rb`，经 GitHub contents API 读（`UpdateSource.caskRequest`，`Accept: application/vnd.github.raw` 直接拿文件；未认证 60 次/小时/IP，够用）。**不要换回 raw.githubusercontent.com**：它的 CDN 在发版 5 分钟后仍会返回旧 cask（issue `update-check-stale-cdn`）；0.2.0 / 0.2.1 还是 raw，只是晚几分钟看到新版。app 版本读 `CFBundleShortVersionString`，本地构建 `0.0.0` 视为开发版、永不提示。本地测提示用 `ISLAND_VERSION=0.0.9 ./scripts/build-app.sh`。有新版本时 Updates tab 名带 `🔴`（NSTabView 标签没法上色，emoji 是唯一不用自绘的办法）、菜单出现 `Update to x available…`。自动检查开关存 `IslandAutoCheckUpdates`（缺省开）。**升级只对 brew 装的有效**（`<prefix>/bin/brew` 与 `<prefix>/Caskroom/island` 都在）：spawn 脱离的 `sh` 后 island 立刻 `terminate`，shell 等 pid 退出再 `brew update && brew upgrade --cask lbyxiafei/tap/island`，输出与 `island-upgrade: exit N` 追加到 `~/Library/Logs/island-upgrade.log`，最后无论成败都 `open -b com.commallama.island`；下次打开 Updates tab 若日志最后一次非 0 会提示。先退出再升级，是为了让 cask 的 `uninstall quit:` 不去 quit 一个正在跑 brew 的父进程。不是 brew 装的就打开 tap 的 Release 页
 - **反馈没有服务端**（issue `upgrade-n-feedback` § Decision）：`Send Email` 是 `mailto:`（用户自己的邮件客户端）、`Open GitHub Issue` 是预填的 `lbyxiafei/island/issues/new`、`Copy` 兜底。URL 编码只放行 RFC 3986 unreserved 字符——`URLComponents` 不转义 `+` / `&`，邮件客户端会把 `+` 当空格
+- **入站通知（P0，issue `island-ipc-p0`）**：外部进程连 `~/Library/Application Support/island/ipc/island.sock`（目录 0700、socket 0600），协议是一行一个 JSON（单帧 ≤64 KiB），`hello` 必须第一个发。socket 认领顺序是 bind → EADDRINUSE 时 connect 探活 → 只有 `ECONNREFUSED` 才 unlink 重绑；**不要在启动时无条件 unlink**，会偷走在跑实例的路径（ipc.md § 3.1）。P0 只有 `hello` / `notify` / `query`，token 与 `subscribe` 属 P1。外部通知在悬浮窗里是**独立的一节**（D11），有自己的未读数胶囊，点击只标已读，不混进 `AgentInbox`。`IslandCore` 覆盖协议/状态机/去重；socket 与 CLI 属 wiring，已登记 `coverage.config`，用 `nc -U` / `island notify` 手测
 - **开发流程**（PLAN § 开发指南，issue `dev-flow-brew-upgrade`，完整步骤见 `hai/reference/workflow/README.md`）：开发机只装 brew 那份。每次开发完成 = ship 到 master + `./scripts/publish.sh <下一个版本>`，开发者在 Settings → Updates 一键升级来验收，顺带验证 upgrade。只动 `hai/` 的提交不发版。agent 中途要跑构建产物，先 `pkill -x Island`，测完 `pkill -x Island; open /Applications/Island.app` 换回来
 - **app 图标**（issue `app-icon`）：源是 `assets/AppIcon.svg`，**改完要跑 `./scripts/render-app-icon.sh` 并把 `.icns` 一起提交**，`build-app.sh` 不渲染只拷贝。按 macOS 图标网格画（824 主体、圆角 185），否则 macOS 26 会套灰色底框。AppKit 的 SVG 渲染不支持 filter。Finder 有图标缓存，本地换图标后看不到变化时 `touch build/Island.app` 或重启 Finder。**系统设置 → 登录项里的图标是登录项注册那一刻记下的**：在无图标的 0.2.0 上注册过的机器，升级后仍显示空白，`/Applications/Island.app/Contents/MacOS/Island --login-item-disable` 再 `--login-item-enable` 重新注册即刷新（2026-09-28 实测；`lsregister -f`、重启 iconservicesagent 单独都不够确定）
 
