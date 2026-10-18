@@ -170,6 +170,7 @@ scripts/check-layering.sh      # 依赖方向检查
 hai/reference/icon/            # 菜单栏图标与 app 图标的设计说明（SVG / 预览），非运行时依赖
 hai/reference/agents/          # MVP 调研：各 agent 的完成信号 / 任务身份 / 宿主 / 回到任务的手段
 hai/reference/workflow/        # 开发与发布流程：issue → agent 实现 → 本地验收 → publish.sh → brew
+hai/reference/extensions/      # 扩展机制方案（已确认，未实施）：入站通知 IPC / 插件 / 启动器，附三份一手调研
 vscode-extension/              # island 自带的 VS Code 扩展（纯 JS，零依赖）：按 pid 聚焦终端 tab；scripts/build-vscode-extension.sh 用系统 zip 打成 vsix，build-app.sh 放进 Resources
 scripts/build-vscode-extension.sh # 打 vsix（不需要 vsce / npm）
 coverage.config                # 覆盖率排除项
