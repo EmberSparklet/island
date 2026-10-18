@@ -20,6 +20,7 @@ final class OverlayContentView: NSView, NSTextFieldDelegate {
     private static let footerHeight: CGFloat = 28
     private static let padding: CGFloat = 10
     private static let sectionGap: CGFloat = 8
+    private static let sectionHeaderHeight: CGFloat = 26
     /// Bottom inset under the footer; the footer's own height already gives
     /// its text room, so it sits closer to the edge than the rows would.
     private static let footerInset: CGFloat = 4
@@ -31,6 +32,8 @@ final class OverlayContentView: NSView, NSTextFieldDelegate {
     var onOpenSettings: (() -> Void)?
     /// A row in the external-notification section was clicked: mark it read.
     var onSelectNotification: ((String) -> Void)?
+    /// The notification section's `Clear all` button.
+    var onClearNotifications: (() -> Void)?
     /// The row count changed (typing filters the list), so the panel resizes.
     var onHeightChange: ((CGFloat) -> Void)?
 
@@ -54,10 +57,16 @@ final class OverlayContentView: NSView, NSTextFieldDelegate {
     private let spacer = NSView()
     private let searchIcon = NSImageView()
     private let searchField = NSTextField()
-    private let noticePill = KeycapView()
     private let newPill = KeycapView()
     private let hotkeyCap = KeycapView()
+    /// Tasks and notifications scroll together; the panel never grows past the
+    /// screen (see `maxListHeight`).
+    private let scrollView = NSScrollView()
+    private let document = FlippedDocumentView()
     private let list = NSStackView()
+    /// Shown when rows continue below the visible part.
+    private let moreBelow = NSImageView()
+    private var scrollHeightConstraint: NSLayoutConstraint?
     private let footerBox = NSView()
     private let footer = NSTextField(labelWithString: "")
     private var footerHeightConstraint: NSLayoutConstraint?
@@ -77,13 +86,30 @@ final class OverlayContentView: NSView, NSTextFieldDelegate {
     }
 
     var preferredHeight: CGFloat {
-        let rows = max(selection.rows.count, 1)
         let bottom = showsFooter ? Self.footerHeight + Self.footerInset : Self.padding
-        let notices =
-            notifications.isEmpty
-            ? 0
-            : Self.sectionGap + CGFloat(notifications.count) * Self.notificationRowHeight
-        return Self.padding + Self.headerHeight + CGFloat(rows) * Self.rowHeight + notices + bottom
+        return Self.padding + Self.headerHeight + visibleListHeight + bottom
+    }
+
+    /// Everything the list holds: the task rows (or the empty-state row), then
+    /// the notification section.
+    private var listContentHeight: CGFloat {
+        var height = CGFloat(max(selection.rows.count, 1)) * Self.rowHeight
+        if !notifications.isEmpty {
+            height +=
+                Self.sectionGap + Self.sectionHeaderHeight
+                + CGFloat(notifications.count) * Self.notificationRowHeight
+        }
+        return height
+    }
+
+    /// The list scrolls instead of pushing the panel off the screen.
+    private var visibleListHeight: CGFloat {
+        min(listContentHeight, maxListHeight)
+    }
+
+    private var maxListHeight: CGFloat {
+        let screen = NSScreen.main?.visibleFrame.height ?? 900
+        return max(180, screen - Self.headerHeight - Self.footerHeight - Self.padding * 3 - 40)
     }
 
     func update(
@@ -144,22 +170,79 @@ final class OverlayContentView: NSView, NSTextFieldDelegate {
             }
         }
 
-        for (index, entry) in notifications.enumerated() {
-            let row = OverlayNotificationRowView(entry: entry, palette: palette)
-            row.onClick = { [weak self] id in self?.onSelectNotification?(id) }
-            if index == 0, let previous = list.arrangedSubviews.last {
+        if !notifications.isEmpty {
+            if let previous = list.arrangedSubviews.last {
                 list.setCustomSpacing(Self.sectionGap, after: previous)
             }
-            list.addArrangedSubview(row)
-            NSLayoutConstraint.activate([
-                row.widthAnchor.constraint(equalTo: list.widthAnchor),
-                row.heightAnchor.constraint(equalToConstant: Self.notificationRowHeight),
-            ])
+            addNotificationHeader()
+            for entry in notifications {
+                let row = OverlayNotificationRowView(entry: entry, palette: palette)
+                row.onClick = { [weak self] id in self?.onSelectNotification?(id) }
+                list.addArrangedSubview(row)
+                NSLayoutConstraint.activate([
+                    row.widthAnchor.constraint(equalTo: list.widthAnchor),
+                    row.heightAnchor.constraint(equalToConstant: Self.notificationRowHeight),
+                ])
+            }
         }
 
+        scrollHeightConstraint?.constant = visibleListHeight
         refreshHighlight()
         refreshHeader()
+        refreshScrollHint()
         onHeightChange?(preferredHeight)
+    }
+
+    /// `N notifications` on the left, `Clear all` on the right.
+    private func addNotificationHeader() {
+        let header = NSView()
+        let title = NSTextField(labelWithString: Self.noticeText(notifications.count))
+        title.font = .systemFont(ofSize: 11, weight: .semibold)
+        title.textColor = NSColor(palette.muted)
+        title.translatesAutoresizingMaskIntoConstraints = false
+
+        let clear = NSButton(
+            title: L10n.current.text(.noticeClear), target: self,
+            action: #selector(clearNotifications))
+        clear.isBordered = false
+        clear.bezelStyle = .inline
+        clear.font = .systemFont(ofSize: 11, weight: .medium)
+        clear.contentTintColor = NSColor(palette.accent)
+        clear.translatesAutoresizingMaskIntoConstraints = false
+        clear.setContentHuggingPriority(.required, for: .horizontal)
+        clear.setContentCompressionResistancePriority(.required, for: .horizontal)
+
+        header.addSubview(title)
+        header.addSubview(clear)
+        list.addArrangedSubview(header)
+        NSLayoutConstraint.activate([
+            header.widthAnchor.constraint(equalTo: list.widthAnchor),
+            header.heightAnchor.constraint(equalToConstant: Self.sectionHeaderHeight),
+            title.leadingAnchor.constraint(equalTo: header.leadingAnchor, constant: 12),
+            title.centerYAnchor.constraint(equalTo: header.centerYAnchor),
+            clear.trailingAnchor.constraint(equalTo: header.trailingAnchor, constant: -12),
+            clear.centerYAnchor.constraint(equalTo: header.centerYAnchor),
+            clear.leadingAnchor.constraint(greaterThanOrEqualTo: title.trailingAnchor, constant: 8),
+        ])
+    }
+
+    @objc private func clearNotifications() {
+        onClearNotifications?()
+    }
+
+    @objc private func scrollBoundsChanged() {
+        refreshScrollHint()
+    }
+
+    private func refreshScrollHint() {
+        let visible = visibleListHeight
+        let offset = scrollView.contentView.bounds.origin.y
+        moreBelow.isHidden = !OverlayScrollHint.shouldShow(
+            offsetY: offset, visibleHeight: visible, contentHeight: listContentHeight)
+    }
+
+    deinit {
+        NotificationCenter.default.removeObserver(self)
     }
 
     private func addEmptyRow() {
@@ -194,6 +277,10 @@ final class OverlayContentView: NSView, NSTextFieldDelegate {
         for (index, row) in rowViews.enumerated() {
             row.setSelected(index == selection.selectedIndex)
         }
+        guard isKeyboardMode, let index = selection.selectedIndex,
+            rowViews.indices.contains(index)
+        else { return }
+        rowViews[index].scrollToVisible(rowViews[index].bounds)
     }
 
     private func refreshHeader() {
@@ -216,13 +303,6 @@ final class OverlayContentView: NSView, NSTextFieldDelegate {
         newPill.set(
             text: text, textColor: NSColor(palette.accent),
             background: NSColor(palette.selectionBackground), fontSize: 11)
-        // The external-notification count is deliberately its own pill: those
-        // rows never mix with agent tasks.
-        let unreadNotices = notifications.lazy.filter { !$0.isRead }.count
-        noticePill.set(
-            text: Self.noticeText(unreadNotices), textColor: NSColor(palette.accent),
-            background: NSColor(palette.selectionBackground), fontSize: 11)
-        noticePill.isHidden = unreadNotices == 0
         let count = selection.rows.count
         let placeholder: String
         switch count {
@@ -254,6 +334,7 @@ final class OverlayContentView: NSView, NSTextFieldDelegate {
         searchField.textColor = NSColor(palette.title)
         searchIcon.contentTintColor = NSColor(palette.subtitle)
         footer.textColor = NSColor(palette.muted)
+        moreBelow.contentTintColor = NSColor(palette.muted)
         render()
     }
 
@@ -319,7 +400,7 @@ final class OverlayContentView: NSView, NSTextFieldDelegate {
         status.font = .systemFont(ofSize: 13, weight: .semibold)
         spacer.setContentHuggingPriority(.defaultLow - 1, for: .horizontal)
         let header = NSStackView(views: [
-            dot, status, searchIcon, searchField, spacer, noticePill, newPill, hotkeyCap,
+            dot, status, searchIcon, searchField, spacer, newPill, hotkeyCap,
         ])
         header.orientation = .horizontal
         header.distribution = .fill
@@ -335,19 +416,42 @@ final class OverlayContentView: NSView, NSTextFieldDelegate {
         list.spacing = 0
         list.translatesAutoresizingMaskIntoConstraints = false
 
+        document.translatesAutoresizingMaskIntoConstraints = false
+        document.addSubview(list)
+        scrollView.documentView = document
+        scrollView.drawsBackground = false
+        scrollView.borderType = .noBorder
+        scrollView.hasVerticalScroller = false
+        scrollView.automaticallyAdjustsContentInsets = false
+        scrollView.translatesAutoresizingMaskIntoConstraints = false
+        scrollView.contentView.postsBoundsChangedNotifications = true
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(scrollBoundsChanged),
+            name: NSView.boundsDidChangeNotification, object: scrollView.contentView)
+
+        moreBelow.image = NSImage(
+            systemSymbolName: "chevron.down.circle.fill", accessibilityDescription: "more below")
+        moreBelow.symbolConfiguration = .init(pointSize: 15, weight: .semibold)
+        moreBelow.contentTintColor = NSColor(palette.muted)
+        moreBelow.alphaValue = 0.55
+        moreBelow.isHidden = true
+        moreBelow.translatesAutoresizingMaskIntoConstraints = false
+
         footer.font = .systemFont(ofSize: 10.5)
         footer.alignment = .center
         footer.translatesAutoresizingMaskIntoConstraints = false
         footerBox.translatesAutoresizingMaskIntoConstraints = false
         footerBox.addSubview(footer)
 
-        for view in [header, list, footerBox] { addSubview(view) }
+        for view in [header, scrollView, footerBox, moreBelow] { addSubview(view) }
 
         let footerHeight = footerBox.heightAnchor.constraint(equalToConstant: 0)
         footerHeightConstraint = footerHeight
         let bottomInset = footerBox.bottomAnchor.constraint(
             equalTo: bottomAnchor, constant: -Self.padding)
         bottomInsetConstraint = bottomInset
+        let scrollHeight = scrollView.heightAnchor.constraint(equalToConstant: 100)
+        scrollHeightConstraint = scrollHeight
         let pad = Self.padding
         NSLayoutConstraint.activate([
             glassView.leadingAnchor.constraint(equalTo: leadingAnchor),
@@ -371,12 +475,27 @@ final class OverlayContentView: NSView, NSTextFieldDelegate {
             header.topAnchor.constraint(equalTo: topAnchor, constant: pad),
             header.heightAnchor.constraint(equalToConstant: Self.headerHeight),
 
-            list.leadingAnchor.constraint(equalTo: leadingAnchor, constant: pad),
-            list.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -pad),
-            list.topAnchor.constraint(equalTo: header.bottomAnchor),
+            list.leadingAnchor.constraint(equalTo: document.leadingAnchor),
+            list.trailingAnchor.constraint(equalTo: document.trailingAnchor),
+            list.topAnchor.constraint(equalTo: document.topAnchor),
+            list.bottomAnchor.constraint(equalTo: document.bottomAnchor),
 
-            footerBox.leadingAnchor.constraint(equalTo: list.leadingAnchor),
-            footerBox.trailingAnchor.constraint(equalTo: list.trailingAnchor),
+            document.leadingAnchor.constraint(equalTo: scrollView.contentView.leadingAnchor),
+            document.trailingAnchor.constraint(equalTo: scrollView.contentView.trailingAnchor),
+            document.topAnchor.constraint(equalTo: scrollView.contentView.topAnchor),
+            document.widthAnchor.constraint(equalTo: scrollView.contentView.widthAnchor),
+
+            scrollView.leadingAnchor.constraint(equalTo: leadingAnchor, constant: pad),
+            scrollView.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -pad),
+            scrollView.topAnchor.constraint(equalTo: header.bottomAnchor),
+            scrollView.bottomAnchor.constraint(equalTo: footerBox.topAnchor),
+            scrollHeight,
+
+            moreBelow.centerXAnchor.constraint(equalTo: scrollView.centerXAnchor),
+            moreBelow.bottomAnchor.constraint(equalTo: scrollView.bottomAnchor, constant: -4),
+
+            footerBox.leadingAnchor.constraint(equalTo: leadingAnchor, constant: pad),
+            footerBox.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -pad),
             footerHeight,
             bottomInset,
             footer.leadingAnchor.constraint(equalTo: footerBox.leadingAnchor),
@@ -453,6 +572,13 @@ final class OverlayContentView: NSView, NSTextFieldDelegate {
     override func mouseExited(with event: NSEvent) {
         onHoverChange?(false)
     }
+}
+
+/// AppKit scroll views count from the bottom unless the document view is
+/// flipped; the "more below" math assumes an offset from the top.
+@MainActor
+final class FlippedDocumentView: NSView {
+    override var isFlipped: Bool { true }
 }
 
 /// The capsule outline: flat where it meets the top of the screen, generously

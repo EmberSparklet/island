@@ -14,8 +14,7 @@ public final class ExternalInbox: @unchecked Sendable {
         public fileprivate(set) var isRead: Bool
     }
 
-    /// How many rows the overlay lists.
-    public let limit: Int
+    /// How many rows are kept in memory (the overlay scrolls whatever it has).
     private let capacity: Int
     private let dedupCapacity: Int
     private let lock = NSLock()
@@ -24,9 +23,8 @@ public final class ExternalInbox: @unchecked Sendable {
     private var seen: [String] = []
     private var seenSet: Set<String> = []
 
-    public init(limit: Int = 10, capacity: Int = 200, dedupCapacity: Int = 512) {
-        self.limit = max(1, limit)
-        self.capacity = max(self.limit, capacity)
+    public init(capacity: Int = 200, dedupCapacity: Int = 512) {
+        self.capacity = max(1, capacity)
         self.dedupCapacity = max(1, dedupCapacity)
     }
 
@@ -57,8 +55,13 @@ public final class ExternalInbox: @unchecked Sendable {
         return entries.lazy.filter { !$0.isRead }.count
     }
 
-    /// What the overlay renders: the newest `limit` rows.
-    public var visibleEntries: [Entry] { Array(allEntries.prefix(limit)) }
+    /// Drops every row the user has seen; the deduplication window stays, so a
+    /// client retrying an event id it already sent does not resurrect it.
+    public func clear() {
+        lock.lock()
+        defer { lock.unlock() }
+        entries.removeAll()
+    }
 
     public func markRead(id: String) {
         lock.lock()

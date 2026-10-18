@@ -37,7 +37,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     init(configuration: ResolvedConfiguration) {
         self.configuration = configuration
-        externalInbox = ExternalInbox(limit: configuration.taskLimit)
+        externalInbox = ExternalInbox()
         popup = popupStore.load(fallback: configuration.duration)
         scenarios = scenarioStore.load()
         super.init()
@@ -72,6 +72,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         content.onSelect = { [weak self] entry in self?.selectTask(entry) }
         content.onSelectNotification = { [weak self] id in self?.selectNotification(id: id) }
+        content.onClearNotifications = { [weak self] in self?.clearNotifications() }
         content.onHoverChange = { [weak self] hovering in self?.setOverlayHovered(hovering) }
         content.onDismiss = { [weak self] in self?.hideOverlay(reason: "overlay dismissed") }
         content.onHeightChange = { [weak self] height in
@@ -227,6 +228,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         refreshAgentUI()
     }
 
+    /// The section's `Clear all`: drop every external row, keep the
+    /// deduplication window so a retried event does not come back.
+    private func clearNotifications() {
+        externalInbox.clear()
+        refreshAgentUI()
+        log("external notifications cleared")
+    }
+
     /// Which of `tasks` the user is looking at: the frontmost app is read here,
     /// on the main thread; the shelling out happens on `visibilityQueue`.
     private func tasksInView(_ tasks: [AgentTask]) async -> Set<String> {
@@ -253,7 +262,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             entries: entries,
             unread: inbox.unreadCount,
             hotkey: settings?.current ?? configuration.hotkey.spec,
-            notifications: externalInbox.visibleEntries
+            notifications: externalInbox.allEntries
         )
         // What a `query` from the socket reports, captured on the main thread.
         ipcSnapshot.update(

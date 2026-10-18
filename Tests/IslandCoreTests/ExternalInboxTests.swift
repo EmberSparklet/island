@@ -13,7 +13,7 @@ final class ExternalInboxTests: XCTestCase {
         XCTAssertEqual(first?.id, "cli\u{1F}1")
         XCTAssertEqual(second?.title, "second")
         XCTAssertEqual(inbox.unreadCount, 2)
-        XCTAssertEqual(inbox.visibleEntries.map(\.title), ["second", "first"])
+        XCTAssertEqual(inbox.allEntries.map(\.title), ["second", "first"])
         XCTAssertEqual(inbox.allEntries.map(\.client), ["cli", "cli"])
         XCTAssertEqual(inbox.allEntries.first?.isRead, false)
         XCTAssertEqual(inbox.allEntries.first?.receivedAt, base + 5)
@@ -53,16 +53,31 @@ final class ExternalInboxTests: XCTestCase {
         XCTAssertEqual(inbox.unreadCount, 0)
     }
 
-    func testVisibleEntriesAreCappedAtTheLimit() {
-        let inbox = ExternalInbox(limit: 2)
+    func testClearDropsEveryRowButKeepsTheDedupWindow() {
+        let inbox = ExternalInbox()
+        for index in 1...3 {
+            inbox.add(client: "cli", title: "\(index)", eventID: "\(index)", at: base)
+        }
+        inbox.markRead(id: inbox.allEntries[0].id)
+
+        inbox.clear()
+
+        XCTAssertEqual(inbox.allEntries.count, 0)
+        XCTAssertEqual(inbox.unreadCount, 0)
+        XCTAssertNil(inbox.add(client: "cli", title: "1 again", eventID: "1", at: base))
+        XCTAssertNotNil(inbox.add(client: "cli", title: "4", eventID: "4", at: base))
+        XCTAssertEqual(inbox.allEntries.map(\.title), ["4"])
+    }
+
+    func testTheCapacityBoundsMemory() {
+        let inbox = ExternalInbox(capacity: 5)
         for index in 1...5 {
             inbox.add(
                 client: "cli", title: "\(index)", eventID: "\(index)", at: base + Double(index))
         }
 
         XCTAssertEqual(inbox.allEntries.count, 5)
-        XCTAssertEqual(inbox.visibleEntries.count, 2)
-        XCTAssertEqual(inbox.visibleEntries.map(\.title), ["5", "4"])
+        XCTAssertEqual(inbox.allEntries.map(\.title), ["5", "4", "3", "2", "1"])
     }
 
     func testTheDeduplicationWindowForgetsOldEvents() {
@@ -77,7 +92,7 @@ final class ExternalInboxTests: XCTestCase {
     }
 
     func testTrimDropsTheOldestReadRowsButKeepsUnreadOnes() {
-        let inbox = ExternalInbox(limit: 1, capacity: 2)
+        let inbox = ExternalInbox(capacity: 2)
         for index in 1...3 {
             inbox.add(client: "cli", title: "\(index)", eventID: "\(index)", at: base)
         }
@@ -91,11 +106,10 @@ final class ExternalInboxTests: XCTestCase {
         XCTAssertEqual(inbox.allEntries.map(\.isRead), [false, false])
     }
 
-    func testTheDeduplicationCapacityAndLimitAreClamped() {
-        let inbox = ExternalInbox(limit: 0, capacity: 0, dedupCapacity: 0)
-        XCTAssertEqual(inbox.limit, 1)
+    func testTheCapacitiesAreClampedToAtLeastOne() {
+        let inbox = ExternalInbox(capacity: 0, dedupCapacity: 0)
         inbox.add(client: "cli", title: "one", eventID: "e", at: base)
-        XCTAssertEqual(inbox.visibleEntries.count, 1)
+        XCTAssertEqual(inbox.allEntries.count, 1)
         XCTAssertNil(inbox.add(client: "cli", title: "one", eventID: "e", at: base))
     }
 }
