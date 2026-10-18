@@ -8,6 +8,19 @@ final class LauncherTests: XCTestCase {
         baseURL: URL(string: "https://example.com/chat")!,
         queryItem: "q")
 
+    private let kimi = LauncherTarget(
+        id: "kimi", name: "Kimi",
+        baseURL: URL(string: "https://www.kimi.com/")!, queryItem: "q")
+
+    /// The environment channel keeps the four fields it always had: no options.
+    /// Ticking one is a Settings feature, so `ISLAND_LAUNCHER_TARGETS` can never
+    /// turn auto-send on behind the user's back.
+    private let deepSeekFromEnvironment = LauncherTarget(
+        id: "deepseek", name: "DeepSeek",
+        baseURL: URL(string: "https://chat.deepseek.com/")!, queryItem: "q")
+
+    // MARK: - URLs
+
     func testABlankQuestionOpensTheSiteItself() {
         XCTAssertEqual(Launcher.url(for: target, query: ""), target.baseURL)
         XCTAssertEqual(Launcher.url(for: target, query: "  \n\t "), target.baseURL)
@@ -36,7 +49,6 @@ final class LauncherTests: XCTestCase {
     }
 
     func testTheBuiltInTargetIsDeepSeek() {
-        XCTAssertEqual(Launcher.builtIn, [Launcher.deepSeek])
         XCTAssertEqual(Launcher.deepSeek.id, "deepseek")
         XCTAssertEqual(Launcher.deepSeek.name, "DeepSeek")
         XCTAssertEqual(Launcher.deepSeek.queryItem, "q")
@@ -58,6 +70,62 @@ final class LauncherTests: XCTestCase {
             "http://127.0.0.1:8080/chat?model=x")
     }
 
+    // MARK: - Options
+
+    /// The built-in ships `autosend` so the user can tick it, never ticked for
+    /// them: a question must not leave island unasked (decision D9/D14).
+    func testTheBuiltInTargetShipsAutosendUnticked() {
+        XCTAssertEqual(Launcher.deepSeek.options.map(\.key), ["autosend"])
+        XCTAssertEqual(Launcher.deepSeek.options.first?.value, "1")
+        XCTAssertEqual(Launcher.deepSeek.options.first?.isEnabled, false)
+        XCTAssertEqual(
+            Launcher.url(for: Launcher.deepSeek, query: "hi")?.absoluteString,
+            "https://chat.deepseek.com/?q=hi")
+    }
+
+    func testATickedOptionReachesTheURLAfterTheQuestion() {
+        var deepSeek = Launcher.deepSeek
+        deepSeek.options[0].isEnabled = true
+        XCTAssertEqual(
+            Launcher.url(for: deepSeek, query: "hi")?.absoluteString,
+            "https://chat.deepseek.com/?q=hi&autosend=1")
+    }
+
+    func testTickedOptionsFollowTheOrderTheUserPutThemIn() {
+        let kimiDeepLink = LauncherTarget(
+            id: "kimi", name: "Kimi",
+            baseURL: URL(string: "https://kimi.moonshot.cn/_prefill_chat")!,
+            queryItem: "prefill_prompt",
+            options: [
+                LauncherOption(
+                    key: "send_immediately", value: "true", label: "Auto", isEnabled: true),
+                LauncherOption(
+                    key: "force_search", value: "false", label: "Force", isEnabled: true),
+            ])
+        XCTAssertEqual(
+            Launcher.url(for: kimiDeepLink, query: "hi")?.absoluteString,
+            "https://kimi.moonshot.cn/_prefill_chat?prefill_prompt=hi&send_immediately=true&force_search=false"
+        )
+    }
+
+    func testAnUntickedOptionStaysOutOfTheURL() {
+        var deepSeek = Launcher.deepSeek
+        deepSeek.options[0].isEnabled = false
+        XCTAssertEqual(
+            Launcher.url(for: deepSeek, query: "hi")?.absoluteString,
+            "https://chat.deepseek.com/?q=hi")
+    }
+
+    /// A blank question opens the site itself, so options have nothing to
+    /// describe and stay out.
+    func testABlankQuestionDoesNotCarryOptions() {
+        var deepSeek = Launcher.deepSeek
+        deepSeek.options[0].isEnabled = true
+        XCTAssertEqual(
+            Launcher.url(for: deepSeek, query: "   ")?.absoluteString,
+            "https://chat.deepseek.com/")
+    }
+
     // MARK: - Target list
 
     func testATargetListIsPipesBetweenFieldsAndSemicolonsBetweenTargets() {
@@ -67,7 +135,7 @@ final class LauncherTests: XCTestCase {
         XCTAssertEqual(
             parsed.targets,
             [
-                Launcher.deepSeek,
+                deepSeekFromEnvironment,
                 LauncherTarget(
                     id: "other", name: "Other",
                     baseURL: URL(string: "https://other.example.com")!, queryItem: "ask"),
@@ -77,7 +145,7 @@ final class LauncherTests: XCTestCase {
 
     func testEmptyPiecesAreNotTargetsAndNotMistakes() {
         let parsed = Launcher.parseTargets(" ;; deepseek|DeepSeek|https://chat.deepseek.com/|q ; ")
-        XCTAssertEqual(parsed.targets, [Launcher.deepSeek])
+        XCTAssertEqual(parsed.targets, [deepSeekFromEnvironment])
         XCTAssertEqual(parsed.skipped, 0)
     }
 
@@ -108,12 +176,250 @@ final class LauncherTests: XCTestCase {
         XCTAssertEqual(parsed.skipped, 1)
     }
 
+    // MARK: - The mode ring
+
+    func testTheRingStartsWithTheTaskFilterAndDeepSeek() {
+        XCTAssertEqual(Launcher.builtIn, [.searchTasks, .target(Launcher.deepSeek)])
+        XCTAssertEqual(
+            Launcher.builtIn.map(\.name), [L10n.current.text(.searchTasks), "DeepSeek"])
+        XCTAssertTrue(Launcher.builtIn[0].isSearchTasks)
+        XCTAssertNil(Launcher.builtIn[0].target)
+    }
+
+    /// `⇥` used to start composing; now it just moves to the next stop, and a
+    /// ring with nothing else in it leaves the key alone.
+    func testTabWalksTheRingAndWrapsAtBothEnds() {
+        XCTAssertEqual(Launcher.nextModeIndex(from: 0, count: 3), 1)
+        XCTAssertEqual(Launcher.nextModeIndex(from: 1, count: 3), 2)
+        XCTAssertEqual(Launcher.nextModeIndex(from: 2, count: 3), 0)
+        XCTAssertEqual(Launcher.nextModeIndex(from: 1, count: 2), 0)
+        XCTAssertNil(Launcher.nextModeIndex(from: 0, count: 1))
+        XCTAssertNil(Launcher.nextModeIndex(from: 0, count: 0))
+    }
+
+    func testAnOutOfRangeIndexStartsOver() {
+        XCTAssertEqual(Launcher.nextModeIndex(from: 9, count: 3), 0)
+        XCTAssertEqual(Launcher.nextModeIndex(from: -1, count: 3), 0)
+    }
+
+    func testSanitizingPutsTheTaskFilterBackInFront() {
+        XCTAssertEqual(
+            Launcher.sanitized([.target(Launcher.deepSeek)]),
+            [.searchTasks, .target(Launcher.deepSeek)])
+        XCTAssertEqual(Launcher.sanitized([]), [.searchTasks])
+    }
+
+    /// A second task filter is dropped, but the ring's order is left alone: the
+    /// user may well have made a site the default.
+    func testSanitizingKeepsTheOrderAndDropsASecondFilter() {
+        let modes: [LauncherMode] = [.target(Launcher.deepSeek), .searchTasks, .searchTasks]
+        XCTAssertEqual(Launcher.sanitized(modes), [.target(Launcher.deepSeek), .searchTasks])
+    }
+
+    /// `NSTableView` reports the drop row before the moved row is taken out.
+    func testMovingAModeUsesTheTableRowSemantics() {
+        let modes: [LauncherMode] = [.searchTasks, .target(kimi), .target(Launcher.deepSeek)]
+        XCTAssertEqual(
+            Launcher.moving(modes, from: 2, to: 0),
+            [.target(Launcher.deepSeek), .searchTasks, .target(kimi)])
+        XCTAssertEqual(
+            Launcher.moving(modes, from: 0, to: 3),
+            [.target(kimi), .target(Launcher.deepSeek), .searchTasks])
+        XCTAssertEqual(Launcher.moving(modes, from: 1, to: 1), modes)
+        XCTAssertEqual(Launcher.moving(modes, from: 9, to: 0), modes)
+        XCTAssertEqual(Launcher.moving(modes, from: 0, to: 9), modes)
+    }
+
+    func testTheTaskFilterCannotBeRemovedOrReplaced() {
+        let modes: [LauncherMode] = [.searchTasks, .target(kimi)]
+        XCTAssertEqual(Launcher.removing(modes, at: 0), modes)
+        XCTAssertEqual(Launcher.replacing(modes, at: 0, with: .target(Launcher.deepSeek)), modes)
+        XCTAssertEqual(Launcher.removing(modes, at: 5), modes)
+        XCTAssertEqual(Launcher.removing(modes, at: 1), [.searchTasks])
+        XCTAssertEqual(
+            Launcher.replacing(modes, at: 1, with: .target(Launcher.deepSeek)),
+            [.searchTasks, .target(Launcher.deepSeek)])
+    }
+
+    func testInsertingClampsToTheRing() {
+        XCTAssertEqual(
+            Launcher.inserting([.searchTasks], .target(kimi), at: 0),
+            [.target(kimi), .searchTasks])
+        XCTAssertEqual(
+            Launcher.inserting([.searchTasks], .target(kimi), at: 9),
+            [.searchTasks, .target(kimi)])
+        XCTAssertEqual(
+            Launcher.inserting([.searchTasks], .target(kimi), at: -3),
+            [.target(kimi), .searchTasks])
+    }
+
+    // MARK: - IDs
+
+    func testIDsComeFromTheNameAndStayUnique() {
+        XCTAssertEqual(Launcher.uniqueID(from: "Kimi 聊天", taken: []), "kimi")
+        XCTAssertEqual(Launcher.uniqueID(from: "My Site!", taken: []), "my-site")
+        XCTAssertEqual(Launcher.uniqueID(from: "聊天", taken: []), "mode")
+        XCTAssertEqual(Launcher.uniqueID(from: "  --  ", taken: []), "mode")
+        XCTAssertEqual(Launcher.uniqueID(from: "Kimi", taken: ["kimi"]), "kimi-2")
+        XCTAssertEqual(Launcher.uniqueID(from: "Kimi", taken: ["kimi", "kimi-2"]), "kimi-3")
+    }
+
+    // MARK: - Editing a target
+
+    /// Opening the sheet on an existing mode is the only caller of this
+    /// initialiser, and it must carry the ticked options over untouched.
+    func testADraftStartsFromAnExistingTarget() {
+        var deepSeek = Launcher.deepSeek
+        deepSeek.options[0].isEnabled = true
+        let draft = Launcher.Draft(deepSeek)
+        XCTAssertEqual(draft.name, "DeepSeek")
+        XCTAssertEqual(draft.baseURLText, "https://chat.deepseek.com/")
+        XCTAssertEqual(draft.queryItem, "q")
+        XCTAssertEqual(draft.options, deepSeek.options)
+        XCTAssertEqual(
+            Launcher.target(from: draft, keepingID: deepSeek.id, taken: [])?.options.first?
+                .isEnabled,
+            true)
+    }
+
+    func testAValidDraftHasNoIssues() {
+        let draft = Launcher.Draft(
+            name: "Kimi", baseURLText: "https://www.kimi.com/", queryItem: "q",
+            options: [LauncherOption(key: "send_immediately", value: "true", label: "Auto")])
+        XCTAssertEqual(Launcher.issues(in: draft), [])
+    }
+
+    func testEveryBrokenFieldIsReportedAtOnce() {
+        let draft = Launcher.Draft(
+            name: " ", baseURLText: "nonsense", queryItem: "",
+            options: [LauncherOption(key: "", value: "1", label: "A")])
+        XCTAssertEqual(
+            Launcher.issues(in: draft),
+            [.emptyName, .unusableBaseURL, .unusableQueryItem, .optionKeyEmpty(index: 0)])
+    }
+
+    func testAnOptionKeyMustBeItsOwnAndUnique() {
+        let draft = Launcher.Draft(
+            name: "K", baseURLText: "https://k.example.com/", queryItem: "q",
+            options: [
+                LauncherOption(key: "q", value: "1", label: "Same as the question"),
+                LauncherOption(key: "a=b", value: "1", label: "Breaks out"),
+                LauncherOption(key: "a", value: "2", label: "Fine"),
+                LauncherOption(key: "a", value: "3", label: "Twice"),
+            ])
+        XCTAssertEqual(
+            Launcher.issues(in: draft),
+            [
+                .optionKeyUnusable(index: 0), .optionKeyUnusable(index: 1),
+                .optionKeyDuplicated(index: 3),
+            ]
+        )
+        XCTAssertEqual(
+            Launcher.issues(in: draft).map(\.textKey),
+            [
+                .launcherIssueOptionKeyUnusable, .launcherIssueOptionKeyUnusable,
+                .launcherIssueOptionKeyDuplicated,
+            ])
+    }
+
+    func testAValidDraftBecomesATargetWithTrimmedFields() {
+        let draft = Launcher.Draft(
+            name: " Kimi ", baseURLText: " https://www.kimi.com/ ", queryItem: " q ",
+            options: [LauncherOption(key: "send_immediately", value: "true", label: "Auto")])
+        let built = Launcher.target(from: draft, keepingID: nil, taken: [])
+        XCTAssertEqual(built?.id, "kimi")
+        XCTAssertEqual(built?.name, "Kimi")
+        XCTAssertEqual(built?.baseURL.absoluteString, "https://www.kimi.com/")
+        XCTAssertEqual(built?.queryItem, "q")
+        XCTAssertEqual(built?.options.count, 1)
+    }
+
+    func testABrokenDraftBecomesNoTarget() {
+        XCTAssertNil(
+            Launcher.target(
+                from: Launcher.Draft(name: "K", baseURLText: "x", queryItem: "q"),
+                keepingID: nil, taken: []))
+    }
+
+    func testEditingKeepsTheOriginalID() {
+        let draft = Launcher.Draft(
+            name: "Renamed", baseURLText: "https://x.example.com/", queryItem: "q")
+        XCTAssertEqual(
+            Launcher.target(from: draft, keepingID: "kimi", taken: ["kimi"])?.id, "kimi")
+    }
+
+    func testANewTargetAvoidsTheIDsAlreadyInUse() {
+        let draft = Launcher.Draft(
+            name: "Kimi", baseURLText: "https://x.example.com/", queryItem: "q")
+        XCTAssertEqual(
+            Launcher.target(from: draft, keepingID: nil, taken: ["kimi"])?.id, "kimi-2")
+    }
+
+    /// A base pasted out of the browser's address bar often still carries its own
+    /// `?q=`; ours has to replace it, not sit next to it.
+    func testOurParameterReplacesTheOneTheBaseURLCarried() {
+        let deepSeekWithBaseQuery = LauncherTarget(
+            id: "probe", name: "Probe",
+            baseURL: URL(string: "https://chat.deepseek.com/?q=")!,
+            queryItem: "q")
+        XCTAssertEqual(
+            Launcher.url(for: deepSeekWithBaseQuery, query: "hi")?.absoluteString,
+            "https://chat.deepseek.com/?q=hi")
+        let clashing = LauncherTarget(
+            id: "probe", name: "Probe",
+            baseURL: URL(string: "https://example.com/chat?model=x&keep=1")!,
+            queryItem: "q",
+            options: [LauncherOption(key: "model", value: "y", label: "Model", isEnabled: true)])
+        XCTAssertEqual(
+            Launcher.url(for: clashing, query: "hi")?.absoluteString,
+            "https://example.com/chat?keep=1&q=hi&model=y")
+    }
+
+    /// The sheet judges trimmed text, so the stored option must be trimmed too —
+    /// otherwise `  autosend  ` reaches the site as `%20autosend%20=1`.
+    func testPaddedOptionFieldsAreTrimmedOnTheWayIn() {
+        let draft = Launcher.Draft(
+            name: "K", baseURLText: "https://k.example.com/", queryItem: " q ",
+            options: [
+                LauncherOption(
+                    key: "  autosend  ", value: " 1 ", label: " Auto ", isEnabled: true)
+            ])
+        let built = Launcher.target(from: draft, keepingID: nil, taken: [])
+        XCTAssertEqual(built?.queryItem, "q")
+        XCTAssertEqual(built?.options.first?.key, "autosend")
+        XCTAssertEqual(built?.options.first?.value, "1")
+        XCTAssertEqual(built?.options.first?.label, " Auto ")
+        XCTAssertEqual(
+            Launcher.url(for: built!, query: "hi")?.absoluteString,
+            "https://k.example.com/?q=hi&autosend=1")
+    }
+
+    func testSanitizingKeepsOneModePerTargetID() {
+        var first = kimi
+        first.name = "First"
+        var second = kimi
+        second.name = "Second"
+        XCTAssertEqual(
+            Launcher.sanitized([.searchTasks, .target(first), .target(second), .target(first)]),
+            [.searchTasks, .target(first)])
+    }
+
+    func testASecondTaskFilterCannotBeInserted() {
+        let modes: [LauncherMode] = [.searchTasks, .target(kimi)]
+        XCTAssertEqual(Launcher.inserting(modes, .searchTasks, at: 0), modes)
+        XCTAssertEqual(
+            Launcher.inserting(modes, .target(Launcher.deepSeek), at: 0),
+            [.target(Launcher.deepSeek), .searchTasks, .target(kimi)])
+    }
+
     // MARK: - Settings
 
     func testTheLauncherIsOnByDefault() {
         let settings = LauncherSettings.resolve(environment: [:])
         XCTAssertTrue(settings.isEnabled)
-        XCTAssertEqual(settings.targets, Launcher.builtIn)
+        XCTAssertEqual(settings.modes, Launcher.builtIn)
+        XCTAssertEqual(settings.targets, [Launcher.deepSeek])
+        XCTAssertEqual(settings.source, .builtIn)
         XCTAssertFalse(settings.ignoredInvalidEntries)
     }
 
@@ -122,7 +428,9 @@ final class LauncherTests: XCTestCase {
             let settings = LauncherSettings.resolve(
                 environment: [LauncherSettings.environmentKey: value])
             XCTAssertFalse(settings.isEnabled, value)
+            XCTAssertEqual(settings.modes, [], value)
             XCTAssertEqual(settings.targets, [], value)
+            XCTAssertEqual(settings.source, .off, value)
         }
     }
 
@@ -133,13 +441,25 @@ final class LauncherTests: XCTestCase {
         ])
         XCTAssertFalse(settings.isEnabled)
         XCTAssertEqual(settings.targets, [])
+        XCTAssertEqual(settings.source, .off)
+    }
+
+    /// `ISLAND_LAUNCHER=off` is the loudest switch there is, so it outranks a
+    /// ring the user saved in Settings too.
+    func testTheSwitchBeatsASavedRing() {
+        let settings = LauncherSettings.resolve(
+            environment: [LauncherSettings.environmentKey: "off"],
+            stored: [.searchTasks, .target(kimi)])
+        XCTAssertFalse(settings.isEnabled)
+        XCTAssertEqual(settings.source, .off)
     }
 
     func testAnyOtherSwitchValueKeepsTheLauncherOn() {
         for value in ["on", "yes", "1", "deepseek"] {
             let settings = LauncherSettings.resolve(
                 environment: [LauncherSettings.environmentKey: value])
-            XCTAssertEqual(settings.targets, Launcher.builtIn, value)
+            XCTAssertEqual(settings.modes, Launcher.builtIn, value)
+            XCTAssertEqual(settings.source, .builtIn, value)
         }
     }
 
@@ -149,6 +469,8 @@ final class LauncherTests: XCTestCase {
                 "kimi|Kimi|https://www.kimi.com/|q; deepseek|DeepSeek|https://chat.deepseek.com/|q"
         ])
         XCTAssertEqual(settings.targets.map(\.id), ["kimi", "deepseek"])
+        XCTAssertEqual(settings.modes.first, .searchTasks)
+        XCTAssertEqual(settings.source, .environment)
         XCTAssertFalse(settings.ignoredInvalidEntries)
     }
 
@@ -158,14 +480,16 @@ final class LauncherTests: XCTestCase {
         ])
         XCTAssertEqual(settings.targets.map(\.id), ["kimi"])
         XCTAssertTrue(settings.ignoredInvalidEntries)
+        XCTAssertEqual(settings.source, .environment)
     }
 
     func testAListWithNothingUsableFallsBackToTheBuiltIn() {
         let settings = LauncherSettings.resolve(environment: [
             Launcher.targetsEnvironmentKey: "junk;;more junk"
         ])
-        XCTAssertEqual(settings.targets, Launcher.builtIn)
+        XCTAssertEqual(settings.modes, Launcher.builtIn)
         XCTAssertTrue(settings.ignoredInvalidEntries)
+        XCTAssertEqual(settings.source, .builtIn)
     }
 
     func testAnEmptyListValueIsTheSameAsUnset() {
@@ -173,56 +497,42 @@ final class LauncherTests: XCTestCase {
             let settings = LauncherSettings.resolve(environment: [
                 Launcher.targetsEnvironmentKey: value
             ])
-            XCTAssertEqual(settings.targets, Launcher.builtIn, value)
+            XCTAssertEqual(settings.modes, Launcher.builtIn, value)
             XCTAssertFalse(settings.ignoredInvalidEntries, value)
         }
     }
 
-    // MARK: - Compose keys
+    // MARK: - Settings beat the environment
 
-    func testTabStartsComposing() {
-        XCTAssertEqual(
-            Launcher.composeTabAction(composing: false, targetIndex: 0, targetCount: 3), .begin)
-        XCTAssertEqual(
-            Launcher.composeTabAction(composing: false, targetIndex: 0, targetCount: 1), .begin)
+    func testASavedRingBeatsTheEnvironmentList() {
+        let saved: [LauncherMode] = [
+            .searchTasks,
+            .target(
+                LauncherTarget(
+                    id: "saved", name: "Saved",
+                    baseURL: URL(string: "https://saved.example.com/")!, queryItem: "q")),
+        ]
+        let settings = LauncherSettings.resolve(
+            environment: [Launcher.targetsEnvironmentKey: "kimi|Kimi|https://www.kimi.com/|q"],
+            stored: saved)
+        XCTAssertEqual(settings.source, .settings)
+        XCTAssertEqual(settings.names, [L10n.current.text(.searchTasks), "Saved"])
     }
 
-    func testTabWalksTheTargetsAndWrapsAtBothEnds() {
-        XCTAssertEqual(
-            Launcher.composeTabAction(composing: true, targetIndex: 0, targetCount: 3),
-            .moveToTarget(1))
-        XCTAssertEqual(
-            Launcher.composeTabAction(composing: true, targetIndex: 1, targetCount: 3),
-            .moveToTarget(2))
-        XCTAssertEqual(
-            Launcher.composeTabAction(composing: true, targetIndex: 2, targetCount: 3),
-            .moveToTarget(0))
-        XCTAssertEqual(
-            Launcher.composeTabAction(composing: true, targetIndex: 1, targetCount: 2),
-            .moveToTarget(0))
+    func testASavedRingIsSanitizedOnTheWayIn() {
+        let settings = LauncherSettings.resolve(
+            environment: [:], stored: [.target(kimi), .target(Launcher.deepSeek)])
+        XCTAssertEqual(settings.modes.first, .searchTasks)
+        XCTAssertEqual(settings.targets.map(\.id), ["kimi", "deepseek"])
     }
 
-    /// With nothing to switch to, `⇥` leaves compose instead of doing nothing —
-    /// the meaning it had before the target list became configurable.
-    func testTabEndsComposeWhenThereIsOnlyOneTarget() {
+    /// An empty saved ring means "nothing was ever saved", not "switched off" —
+    /// switching off goes through `ISLAND_LAUNCHER=off`.
+    func testAnEmptySavedRingReadsAsUnset() {
         XCTAssertEqual(
-            Launcher.composeTabAction(composing: true, targetIndex: 0, targetCount: 1), .end)
-    }
-
-    func testTabIsIgnoredWhenTheLauncherIsOff() {
-        for composing in [true, false] {
-            XCTAssertEqual(
-                Launcher.composeTabAction(composing: composing, targetIndex: 0, targetCount: 0),
-                .ignored, "\(composing)")
-        }
-    }
-
-    func testAnOutOfRangeIndexStartsOver() {
+            LauncherSettings.resolve(environment: [:], stored: []).modes, Launcher.builtIn)
         XCTAssertEqual(
-            Launcher.composeTabAction(composing: true, targetIndex: 9, targetCount: 3),
-            .moveToTarget(0))
-        XCTAssertEqual(
-            Launcher.composeTabAction(composing: true, targetIndex: -1, targetCount: 3),
-            .moveToTarget(0))
+            LauncherSettings.resolve(environment: [:], stored: nil).modes,
+            Launcher.builtIn)
     }
 }

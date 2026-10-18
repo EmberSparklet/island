@@ -52,17 +52,20 @@ final class OverlayContentView: NSView, NSTextFieldDelegate {
     private var notifications: [ExternalInbox.Entry] = []
     private var hotkey: HotkeySpec?
     private var isKeyboardMode = false
-    /// Every target `⇥` offers; empty when the launcher is off.
-    private var launcherTargets: [LauncherTarget] = []
-    /// Which of them `↩` opens.
-    private var targetIndex = 0
+    /// The mode ring `⇥` walks, in order; empty when the launcher is off.
+    private var launcherModes: [LauncherMode] = []
+    /// Which stop of the ring is showing. Index 0 is the mode the user made the
+    /// default, so summoning the overlay lands wherever they put it.
+    private var modeIndex = 0
     /// True while the field holds a question instead of a task filter.
-    private var isComposing = false
+    private var isComposing: Bool { launcherTarget != nil }
 
-    /// The target `↩` opens while composing.
-    private var launcherTarget: LauncherTarget? {
-        launcherTargets.indices.contains(targetIndex) ? launcherTargets[targetIndex] : nil
+    /// The stop of the ring the field is pointed at.
+    private var launcherMode: LauncherMode? {
+        launcherModes.indices.contains(modeIndex) ? launcherModes[modeIndex] : nil
     }
+    /// The site `↩` opens while composing.
+    private var launcherTarget: LauncherTarget? { launcherMode?.target }
     private(set) var showsHints = true
 
     private var showsFooter: Bool { isKeyboardMode && showsHints }
@@ -149,18 +152,19 @@ final class OverlayContentView: NSView, NSTextFieldDelegate {
         render()
     }
 
-    /// Which chat sites `⇥` offers; an empty list leaves the key alone.
-    func setLauncher(_ targets: [LauncherTarget]) {
-        launcherTargets = targets
-        targetIndex = 0
-        if targets.isEmpty { isComposing = false }
+    /// The mode ring `⇥` walks, in order; the first entry is the mode the
+    /// overlay opens in. An empty ring leaves the key alone.
+    func setLauncher(_ modes: [LauncherMode]) {
+        launcherModes = modes
+        modeIndex = 0
         render()
     }
 
-    /// Keyboard mode starts from an empty query with the first row highlighted.
+    /// Keyboard mode starts from an empty query, on the ring's first mode, with
+    /// the first task row highlighted.
     func setKeyboardMode(_ enabled: Bool) {
         isKeyboardMode = enabled
-        isComposing = false
+        modeIndex = 0
         searchField.stringValue = ""
         selection.setQuery("")
         render()
@@ -354,20 +358,16 @@ final class OverlayContentView: NSView, NSTextFieldDelegate {
         footerBox.isHidden = !showsFooter
         footerHeightConstraint?.constant = showsFooter ? Self.footerHeight : 0
         bottomInsetConstraint?.constant = -(showsFooter ? Self.footerInset : Self.padding)
-        footer.stringValue = Self.footerText(
-            launcher: launcherTarget, targetCount: launcherTargets.count, composing: isComposing)
+        footer.stringValue = Self.footerText(mode: launcherMode, modeCount: launcherModes.count)
     }
 
-    /// The footer only mentions `⇥ ask` when the launcher can actually run, and
-    /// only promises target switching when there is more than one target.
-    private static func footerText(
-        launcher: LauncherTarget?, targetCount: Int, composing: Bool
-    ) -> String {
-        if composing, let launcher {
-            let key: TextKey = targetCount > 1 ? .launcherHintsNextTarget : .launcherHints
-            return L10n.current.formatted(key, launcher.name)
+    /// The footer only mentions `⇥ ask` while the ring can actually move on, and
+    /// names the site the question would go to.
+    private static func footerText(mode: LauncherMode?, modeCount: Int) -> String {
+        if let target = mode?.target {
+            return L10n.current.formatted(.launcherHintsNextMode, target.name)
         }
-        return L10n.current.text(launcher == nil ? .overlayHints : .overlayHintsWithLauncher)
+        return L10n.current.text(modeCount > 1 ? .overlayHintsWithLauncher : .overlayHints)
     }
 
     private func applyPalette() {
@@ -577,7 +577,7 @@ final class OverlayContentView: NSView, NSTextFieldDelegate {
                 onSelect?(entry)
             }
         case #selector(NSResponder.insertTab(_:)):
-            guard applyComposeTab() else { return false }
+            guard applyModeTab() else { return false }
         case #selector(NSResponder.cancelOperation(_:)):
             if isComposing {
                 // `esc` always leaves compose — never the target walk above,
@@ -592,33 +592,25 @@ final class OverlayContentView: NSView, NSTextFieldDelegate {
         return true
     }
 
-    /// `⇥` switches between filtering tasks and asking the launcher; while
-    /// composing it moves on to the next target. False when the launcher is
-    /// switched off, so the key keeps its default meaning.
-    private func applyComposeTab() -> Bool {
-        switch Launcher.composeTabAction(
-            composing: isComposing, targetIndex: targetIndex, targetCount: launcherTargets.count)
-        {
-        case .ignored:
-            return false
-        case .begin:
-            isComposing = true
-            searchField.stringValue = ""
-            selection.setQuery("")
-        case .moveToTarget(let index):
-            // The question the user already typed stays put; only the target moves.
-            targetIndex = index
-        case .end:
-            leaveComposing()
-            return true
-        }
+    /// `⇥` walks the mode ring and wraps. False when the ring holds nothing to
+    /// switch to, so the key keeps its default meaning.
+    ///
+    /// Whatever is typed stays put across the switch: a filter word becomes the
+    /// question, and a question follows the user from one site to the next.
+    private func applyModeTab() -> Bool {
+        guard let next = Launcher.nextModeIndex(from: modeIndex, count: launcherModes.count)
+        else { return false }
+        modeIndex = next
+        // The field changes meaning with the mode. Back on the task filter it
+        // filters again, so a list filtered by an older wording does not linger.
+        if !isComposing { selection.setQuery(searchField.stringValue) }
         render()
         return true
     }
 
     /// Back to filtering tasks, dropping the question that was being composed.
     private func leaveComposing() {
-        isComposing = false
+        if let filter = launcherModes.firstIndex(where: \.isSearchTasks) { modeIndex = filter }
         searchField.stringValue = ""
         selection.setQuery("")
         render()

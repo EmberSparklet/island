@@ -15,8 +15,16 @@ struct ResolvedConfiguration {
     let agentHome: URL
     let ipc: IPCSettings
     let launcher: LauncherSettings
+    /// Something is saved for the mode ring but it cannot be read, so the
+    /// built-in ring took over. Reported rather than swallowed: otherwise
+    /// "never saved" and "your saved ring is broken" look identical.
+    let launcherStorageUnreadable: Bool
 
-    init(environment: [String: String], store: HotkeyStoring = UserDefaultsHotkeyStore()) {
+    init(
+        environment: [String: String],
+        store: HotkeyStoring = UserDefaultsHotkeyStore(),
+        launcherStore: LauncherStoring = UserDefaultsLauncherStore()
+    ) {
         hotkey = HotkeyConfiguration.resolve(
             environment[Self.hotkeyEnvironmentKey],
             stored: store.loadHotkeyText()
@@ -26,7 +34,9 @@ struct ResolvedConfiguration {
         taskLimit = TaskLimit.resolve(environment[Self.taskLimitEnvironmentKey])
         agentHome = AgentHome.resolve(environment[AgentHome.environmentKey])
         ipc = IPCSettings.resolve(environment: environment)
-        launcher = LauncherSettings.resolve(environment: environment)
+        launcher = LauncherSettings.resolve(
+            environment: environment, stored: launcherStore.load())
+        launcherStorageUnreadable = launcherStore.hasUnreadableValue
     }
 
     var summary: String {
@@ -53,13 +63,29 @@ struct ResolvedConfiguration {
                 "warning           \(Launcher.targetsEnvironmentKey) has unusable entries; they were skipped"
             )
         }
+        if launcherStorageUnreadable {
+            lines.append(
+                "warning           \(UserDefaultsLauncherStore.key) in UserDefaults is unreadable; using the built-in ring"
+            )
+        }
         return lines.joined(separator: "\n")
     }
 
-    /// `off`, or the names of every target the launcher offers, in order.
+    /// `off`, or every mode of the ring in order (`Search tasks, DeepSeek`) plus
+    /// where the ring came from — the Settings tab shows the same source, so a
+    /// stored ring the environment overrides is not a mystery.
     private var launcherSummary: String {
         guard launcher.isEnabled else { return "off" }
-        return launcher.targets.map(\.name).joined(separator: ", ")
+        return "\(launcher.names.joined(separator: ", "))  (\(launcherSourceNote))"
+    }
+
+    private var launcherSourceNote: String {
+        switch launcher.source {
+        case .off: return "off"
+        case .settings: return "set in island"
+        case .environment: return "from \(Launcher.targetsEnvironmentKey)"
+        case .builtIn: return "default"
+        }
     }
 
     private var sourceNote: String {

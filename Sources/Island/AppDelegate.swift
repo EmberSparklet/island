@@ -25,6 +25,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let popupStore = UserDefaultsPopupStore()
     private let languageStore = UserDefaultsLanguageStore()
     private let scenarioStore = UserDefaultsAgentScenarioStore()
+    private let launcherStore = UserDefaultsLauncherStore()
     /// Which agent scenarios island watches (Settings → Agents).
     private var scenarios: AgentScenarioSettings
     /// Whether a finished run pops the overlay up, and for how long.
@@ -66,7 +67,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
         content.setTheme(overlayStore.load())
         content.setShowsHints(overlayStore.loadShowsHints())
-        content.setLauncher(configuration.launcher.targets)
+        content.setLauncher(configuration.launcher.modes)
         content.onOpenSettings = { [weak self] in
             self?.hideOverlay(reason: "overlay hidden to open settings")
             self?.settingsWindow?.show()
@@ -369,6 +370,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    /// What the Launcher tab edits: what the user saved, else the ring actually
+    /// in force, else the built-in one. Never an empty table — `ISLAND_LAUNCHER=off`
+    /// leaves the resolved ring empty, and the tab still has to show what the
+    /// user had, plus something to edit back from.
+    private var launcherRingForSettings: [LauncherMode] {
+        if let saved = launcherStore.load() { return saved }
+        return configuration.launcher.isEnabled ? configuration.launcher.modes : Launcher.builtIn
+    }
+
     /// Built at launch and rebuilt on a language change, because every label
     /// inside it is written once, at construction time.
     private func makeSettingsWindow(
@@ -381,6 +391,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             showsHints: showsHints,
             popup: popup,
             scenarios: scenarios,
+            launcherModes: launcherRingForSettings,
+            launcherSource: configuration.launcher.source,
             updates: updates,
             feedbackEnvironment: FeedbackEnvironment(
                 appVersion: updates.current.description,
@@ -394,7 +406,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             onLanguageChanged: { [weak self] language in self?.setLanguage(language) },
             onHintsChanged: { [weak self] shows in self?.setShowsHints(shows) },
             onPopupChanged: { [weak self] popup in self?.setPopup(popup) },
-            onScenariosChanged: { [weak self] scenarios in self?.setScenarios(scenarios) }
+            onScenariosChanged: { [weak self] scenarios in self?.setScenarios(scenarios) },
+            // The returned source is what the tab's footnote shows; the window is
+            // gone whenever `self` is, so the placeholder value is never read.
+            onLauncherChanged: { [weak self] modes in
+                self?.setLauncherModes(modes) ?? .builtIn
+            }
         )
     }
 
@@ -433,6 +450,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         log(
             "pop-up: \(popup.isEnabled ? "on" : "off"), \(ResolvedConfiguration.secondsText(popup.seconds))s"
         )
+    }
+
+    /// Settings → Launcher changed the mode ring: remember it and point the
+    /// overlay at the ring that is actually in force. `ISLAND_LAUNCHER=off` and
+    /// the environment list still win, so the saved ring may not be the one the
+    /// overlay walks; the Launcher tab says which one is live.
+    @discardableResult
+    private func setLauncherModes(_ modes: [LauncherMode]) -> LauncherSettings.Source {
+        launcherStore.save(modes)
+        let resolved = LauncherSettings.resolve(
+            environment: ProcessInfo.processInfo.environment, stored: launcherStore.load())
+        overlayContent?.setLauncher(resolved.modes)
+        log("launcher modes: \(resolved.names.joined(separator: ", "))")
+        return resolved.source
     }
 
     /// Settings → Agents switched scenarios: watch accordingly from the next

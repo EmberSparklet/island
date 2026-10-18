@@ -28,6 +28,8 @@ final class HotkeySettingsWindow: NSObject, NSTextFieldDelegate {
         checkboxWithTitle: L10n.current.text(.popupOnFinish), target: nil, action: nil)
     private let popupSeconds = NSTextField(string: "")
     private let agentsView: AgentSettingsView
+    private let launcherView: LauncherSettingsView
+    private let onLauncherChanged: ([LauncherMode]) -> LauncherSettings.Source
     private let updates: UpdateController
     private let updatesView: UpdateSettingsView
     private let feedbackView: FeedbackSettingsView
@@ -45,6 +47,8 @@ final class HotkeySettingsWindow: NSObject, NSTextFieldDelegate {
         showsHints: Bool,
         popup: PopupSettings,
         scenarios: AgentScenarioSettings,
+        launcherModes: [LauncherMode],
+        launcherSource: LauncherSettings.Source,
         updates: UpdateController,
         feedbackEnvironment: FeedbackEnvironment,
         onHotkeyChanged: @escaping (HotkeySpec, Bool) -> Void,
@@ -52,7 +56,8 @@ final class HotkeySettingsWindow: NSObject, NSTextFieldDelegate {
         onLanguageChanged: @escaping (AppLanguage) -> Void,
         onHintsChanged: @escaping (Bool) -> Void,
         onPopupChanged: @escaping (PopupSettings) -> Void,
-        onScenariosChanged: @escaping (AgentScenarioSettings) -> Void
+        onScenariosChanged: @escaping (AgentScenarioSettings) -> Void,
+        onLauncherChanged: @escaping ([LauncherMode]) -> LauncherSettings.Source
     ) {
         self.popup = popup
         self.onPopupChanged = onPopupChanged
@@ -66,6 +71,9 @@ final class HotkeySettingsWindow: NSObject, NSTextFieldDelegate {
             checkboxWithTitle: L10n.current.text(.enabled), target: nil, action: nil)
         feedback = NSTextField(labelWithString: "")
         agentsView = AgentSettingsView(settings: scenarios, onChange: onScenariosChanged)
+        launcherView = LauncherSettingsView(
+            modes: launcherModes, source: launcherSource, onChange: onLauncherChanged)
+        self.onLauncherChanged = onLauncherChanged
         self.updates = updates
         updatesView = UpdateSettingsView(updates: updates)
         feedbackView = FeedbackSettingsView(environment: feedbackEnvironment)
@@ -141,6 +149,7 @@ final class HotkeySettingsWindow: NSObject, NSTextFieldDelegate {
             ("Appearance", L10n.current.text(.tabAppearance), pane(appearanceSection())),
             ("Notifications", L10n.current.text(.tabNotifications), pane(notificationSection())),
             ("Agents", L10n.current.text(.tabAgents), agentsView as NSView),
+            ("Launcher", L10n.current.text(.tabLauncher), launcherView as NSView),
         ] {
             let item = NSTabViewItem(identifier: id)
             item.label = label

@@ -48,8 +48,38 @@ public enum TextKey: String, CaseIterable, Sendable {
     case overlayHints
     case overlayHintsWithLauncher
     case launcherAsk
-    case launcherHints
-    case launcherHintsNextTarget
+    case launcherHintsNextMode
+    case launcherKindWeb
+    case launcherDefault
+    case tabLauncher
+    case launcherSettingsFootnote
+    case launcherAdd
+    case launcherEdit
+    case launcherDelete
+    case launcherSheetAdd
+    case launcherSheetEdit
+    case launcherFieldName
+    case launcherFieldBaseURL
+    case launcherFieldQueryItem
+    case launcherFieldOptionKey
+    case launcherFieldOptionValue
+    case launcherFieldOptionLabel
+    case launcherOptionAdd
+    case launcherOptionAutoSend
+    case launcherFieldOptionEnabled
+    case launcherSave
+    case launcherCancel
+    case launcherSource
+    case launcherSourceSettings
+    case launcherSourceEnvironment
+    case launcherSourceBuiltIn
+    case launcherSourceOff
+    case launcherIssueName
+    case launcherIssueBaseURL
+    case launcherIssueQueryItem
+    case launcherIssueOptionKeyEmpty
+    case launcherIssueOptionKeyUnusable
+    case launcherIssueOptionKeyDuplicated
 
     // Menu bar
     case summonOverlayWith
@@ -270,8 +300,40 @@ extension Localizer {
         .overlayHints: "↑↓ move   ↩ open   ⌘1–9 jump   ⌘, settings   esc close",
         .overlayHintsWithLauncher: "↑↓ move   ↩ open   ⇥ ask   ⌘1–9 jump   ⌘, settings   esc close",
         .launcherAsk: "Ask %@…",
-        .launcherHints: "↩ send to %@   ⇥ back to search   esc cancel",
-        .launcherHintsNextTarget: "↩ send to %@   ⇥ next target   esc cancel",
+        .launcherHintsNextMode: "↩ send to %@   ⇥ next mode   esc cancel",
+        .launcherKindWeb: "Web ask",
+        .launcherDefault: "default",
+        .tabLauncher: "Launcher",
+        .launcherSettingsFootnote:
+            "One mode per row, walked with ⇥; the first row is the mode the overlay opens in. Search tasks cannot be removed. An extra parameter only reaches the URL once it is ticked. DeepSeek needs a question of at most 800 characters to send it, a signed-in session, and the site root.",
+        .launcherAdd: "Add mode…",
+        .launcherEdit: "Edit",
+        .launcherDelete: "Delete",
+        .launcherSheetAdd: "Add mode",
+        .launcherSheetEdit: "Edit mode",
+        .launcherFieldName: "Name",
+        .launcherFieldBaseURL: "Site address",
+        .launcherFieldQueryItem: "Question parameter",
+        .launcherFieldOptionKey: "Parameter",
+        .launcherFieldOptionValue: "Value",
+        .launcherFieldOptionLabel: "Label",
+        .launcherOptionAdd: "Add parameter",
+        .launcherOptionAutoSend: "Automatic send",
+        .launcherFieldOptionEnabled: "Enabled",
+        .launcherSave: "Save",
+        .launcherCancel: "Cancel",
+        .launcherSource: "source: %@",
+        .launcherSourceSettings: "set in island",
+        .launcherSourceEnvironment: "from ISLAND_LAUNCHER_TARGETS",
+        .launcherSourceBuiltIn: "default",
+        .launcherSourceOff: "off",
+        .launcherIssueName: "Give the mode a name",
+        .launcherIssueBaseURL: "The site address must be an http(s) URL with a host",
+        .launcherIssueQueryItem: "The question parameter cannot be empty or contain & = ? #",
+        .launcherIssueOptionKeyEmpty: "A parameter name cannot be empty",
+        .launcherIssueOptionKeyUnusable:
+            "A parameter name must be its own, without & = ? # and not the question parameter",
+        .launcherIssueOptionKeyDuplicated: "A parameter name is used twice",
 
         .summonOverlayWith: "Summon overlay (%@)",
         .summonHotkey: "Summon hotkey",
@@ -417,8 +479,39 @@ extension Localizer {
         .overlayHints: "↑↓ 选择   ↩ 打开   ⌘1–9 直达   ⌘, 设置   esc 关闭",
         .overlayHintsWithLauncher: "↑↓ 选择   ↩ 打开   ⇥ 提问   ⌘1–9 直达   ⌘, 设置   esc 关闭",
         .launcherAsk: "问 %@…",
-        .launcherHints: "↩ 发送到 %@   ⇥ 返回筛选   esc 取消",
-        .launcherHintsNextTarget: "↩ 发送到 %@   ⇥ 切换目标   esc 取消",
+        .launcherHintsNextMode: "↩ 发送到 %@   ⇥ 切换模式   esc 取消",
+        .launcherKindWeb: "网页提问",
+        .launcherDefault: "默认",
+        .tabLauncher: "启动器",
+        .launcherSettingsFootnote:
+            "一行一个模式，用 ⇥ 依次经过；第一行就是召唤后直接进入的模式。「搜索任务」不可删除。附加参数只有勾选后才写进网址。DeepSeek 的「自动发送」要求问题不超过 800 字、已登录，且只在站点根路径生效。",
+        .launcherAdd: "添加模式…",
+        .launcherEdit: "编辑",
+        .launcherDelete: "删除",
+        .launcherSheetAdd: "添加模式",
+        .launcherSheetEdit: "编辑模式",
+        .launcherFieldName: "名称",
+        .launcherFieldBaseURL: "站点基址",
+        .launcherFieldQueryItem: "问题参数名",
+        .launcherFieldOptionKey: "参数名",
+        .launcherFieldOptionValue: "值",
+        .launcherFieldOptionLabel: "标签",
+        .launcherOptionAdd: "添加参数",
+        .launcherOptionAutoSend: "自动发送",
+        .launcherFieldOptionEnabled: "启用",
+        .launcherSave: "保存",
+        .launcherCancel: "取消",
+        .launcherSource: "生效来源：%@",
+        .launcherSourceSettings: "设置页",
+        .launcherSourceEnvironment: "环境变量 ISLAND_LAUNCHER_TARGETS",
+        .launcherSourceBuiltIn: "内置",
+        .launcherSourceOff: "已关闭",
+        .launcherIssueName: "给这个模式起个名字",
+        .launcherIssueBaseURL: "站点基址必须是带 host 的 http(s) 网址",
+        .launcherIssueQueryItem: "问题参数名不能为空，也不能含 & = ? #",
+        .launcherIssueOptionKeyEmpty: "参数名不能为空",
+        .launcherIssueOptionKeyUnusable: "参数名必须独立，不能含 & = ? #，也不能与问题参数同名",
+        .launcherIssueOptionKeyDuplicated: "参数名重复了",
 
         .summonOverlayWith: "召唤悬浮窗（%@）",
         .summonHotkey: "启用召唤快捷键",

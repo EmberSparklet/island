@@ -265,6 +265,7 @@ A 线（通道，对应 R1）与 B 线（面板与声明式插件，对应 R2/R3
 | P2 | A | skill（智能体接入指南）+ 自测探针客户端 | 探针按 skill 走能接入；真实客户端 `dsh-system-notify` 等基础功能完成后再谈（决策 D8） |
 | P3a | B | launcher section + DeepSeek URL 模板 + compose 输入（**已实施**，issue `overlay-launcher-compose`） | 悬浮窗输入一句话 → 浏览器打开 `chat.deepseek.com/?q=…`（`autosend` 默认不带） |
 | P3b | B | 多目标启动器（**已实施**，issue `launcher-targets`）：目标清单走 `ISLAND_LAUNCHER_TARGETS`，compose 态 `⇥` 循环目标；声明式 manifest（`plugin.json` 解析 + 启用/禁用 + `targets` 字段）**未做** | `ISLAND_LAUNCHER_TARGETS` 设两条目标后 `--print-config` 的 launcher 行列出两个名字，`⇥` 可切换；`make verify` 全绿 |
+| P3c | B | 模式环可配（**已实施**，issue `launcher-modes`）：设置页 → 启动器（拖拽排序 / 增删改 / 逐模式附加参数开关）+ `UserDefaults` 载体 + `⇥` 走环；声明式 manifest（`plugin.json` 解析 + 启用/禁用 + `targets` 字段）**仍未做** | 设置页拖到一个自定义模式排第一，重启后 `⇥` 顺序与之一致；给 DeepSeek 勾上「自动发送」后 URL 带 `autosend=1`；`make verify` 全绿 |
 | P4 | B（依赖 P0/P1） | 进程插件（回连 socket）+ 双向请求帧 + 多全局键 + 已安装智能体探测 | 插件按 id 收事件并能被 island 反向调用；同进程注册 3 键全成功；探测结果与本机实际装机一致 |
 
 P0 为什么不先用文件收件箱：CLI 与协议编解码两边都要写，文件版会让传输层写两遍。文件收件箱保留为"主方案不可用时"的兜底，不单独做一期。`[推断:]` 中
@@ -276,6 +277,8 @@ D11 落地后补充（issue `notification-list-scroll-clear`）：通知区标�
 P3a 落地后补充（issue `overlay-launcher-compose`，2026-10-18 用户选定先做这一段的用户可见部分）：P3 拆成两段。compose 不另开一行/一区，而是把键盘模式的标题行输入框切换用途——`⇥` 在"筛选任务"与"提问"之间切换，`↩` 打开 `https://chat.deepseek.com/?q=<问题>`；目标清单本轮内置 DeepSeek 一条（`LauncherTarget` 已按多目标建模），`ISLAND_LAUNCHER=off` 关闭入口。于是 §4.6 里"launcher section 不与任务行混排"这条**没有按原设计实现**：不为它动 `OverlaySelection` 的行模型，代价是同一时刻只能有一个目标（多目标要等 P3b 的 manifest 与目标切换键）。Kimi 仍未加入：`?q=` 支持情况属 §8 `[未验证]`。
 
 P3b 落地后补充（issue `launcher-targets`，2026-10-18）：开工前由用户回答三个问题，结论是**载体用 `ISLAND_LAUNCHER_TARGETS` 环境变量**（D13）、**compose 态按 `⇥` 循环目标**、**本轮不加 Kimi**。于是"多目标可选可配"落地了，载体不是 manifest：`LauncherTarget` 的四种字段照旧，清单解析、非法条目跳过、`⇥` 循环与开关优先级都在 `IslandCore`（100% 覆盖），AppKit 只渲染当前目标并 `NSWorkspace.open`。只有一个目标时 `⇥` 仍是"退回筛选"，与 P3a 等价。§4.4 的 `targets` 字段与 §4.8 的 manifest 边界都未改动；**声明式 manifest（`plugin.json` 解析 + 启用/禁用 + 字段校验）仍是 P3b 未做的部分，需另开 issue**。
+
+P3c 落地后补充（issue `launcher-modes`，2026-10-18）：把"筛选 / 提问"两态泛化成**有序模式环**（`LauncherMode = 搜索任务 | 网页提问`），`⇥` 恒为"下一站并回绕"，**第一行就是热键召唤后直接进入的模式**（用户选定），`搜索任务` 恒在环里、可拖不可删（`esc` 的取消去处）。载体从"仅环境变量"扩到**设置页（`UserDefaults` 的 `IslandLauncherModes`，JSON）+ 环境变量 + 内置**，优先级 `ISLAND_LAUNCHER=off` > 设置页 > `ISLAND_LAUNCHER_TARGETS` > 内置（D14，与 `CONTEXT.md` 的"应用内设置 > 环境变量"一致；D13 只被扩展、未被推翻——环境变量通道与格式原样保留）。每个模式可挂**任意个可勾选的附加参数**（`LauncherOption`：键 / 值 / 用户起的标签 / 是否启用），DeepSeek 内置一个**默认不勾**的 `autosend=1`（标签「自动发送」）；这取代了 §4.6 的"默认只带 `q`"一刀切，D9 的"要给就给显式开关、默认不带"不变。**Kimi 不内置**：旧域名 `kimi.moonshot.cn/_prefill_chat?prefill_prompt=…&send_immediately=true` 现在只 302 到 `www.kimi.com/_prefill_chat`，而当前 `kimi-web-seo` bundle 里该路由是 `{path:'/_prefill_chat', redirect:'home'}`（参数被丢弃），`send_immediately` **0 命中** —— 旧域名的能力在新域名已不存在，属"未知能否支持"，按用户"只内置已知能支持的部分"的裁决不内置，交给自定义模式。§4.4 的 `targets` 字段与 §4.8 的 manifest 边界仍不变。
 
 ---
 
@@ -310,6 +313,7 @@ P3b 落地后补充（issue `launcher-targets`，2026-10-18）：开工前由用
 | D11 | 外部通知在悬浮窗的展示形态 | 新增外部通知行，单独计数；P0 点击只标记已读 | 要动 `OverlaySelection` 的行模型 |
 | D12 | token（D5）何时做 | 暂缓，先不做；P0/P1 靠同 uid + 0700/0600 + 方法白名单 | P1 去掉 token 与设置界面入口；同用户进程可发通知、可 `query tasks`，这是已知缺口 |
 | D13 | P3b 目标清单的载体（2026-10-18 实施时由用户选定） | `ISLAND_LAUNCHER_TARGETS` 环境变量：`id\|显示名\|站点基址\|查询参数`，`;` 分隔，非法条目跳过；`ISLAND_LAUNCHER=off` 仍整体关闭且优先 | P3b 只做环境变量载体，不创建 `plugins/` 目录；§4.4 的 `targets` 字段与 §4.8 的 manifest 边界都不变，manifest 另开 issue |
+| D14 | P3c 模式环的载体、顺序语义与 `autosend`（2026-10-18 实施时由用户选定） | ① 模式环由**设置页**配置，存 `UserDefaults` 的 `IslandLauncherModes`（JSON），优先级 `ISLAND_LAUNCHER=off` > 设置页 > `ISLAND_LAUNCHER_TARGETS` > 内置；② **第一行即热键召唤后直接进入的模式**，`搜索任务` 恒在环里可拖不可删；③ 附加参数逐模式**显式勾选、默认全不勾**（DeepSeek 预置 `autosend=1`，标签「自动发送」）；④ 只内置**已知能支持**的目标，即 DeepSeek 一条，Kimi 走自定义 | 扩展 D13 而不推翻它（环境变量通道与格式原样保留，仍是开发者覆盖通道）；D9"默认不带"不变，只是从"一刀切"变成"逐模式开关"；不引入配置文件，仍走 `UserDefaults`（§4.8）；`autosend` 从"永不出现"变成"用户勾了才出现" |
 
 ---
 
@@ -321,8 +325,8 @@ P3b 落地后补充（issue `launcher-targets`，2026-10-18）：开工前由用
 |---|---|
 | Developer ID + hardened runtime 下 UDS 仍可用 | 在**有 Developer ID 身份的机器**上用 `ISLAND_SIGN_IDENTITY` 构建一次并重跑 `.build/probe/ipc/run_all.sh`（本机 `security find-identity -v -p codesigning` 为 `0 valid identities found`，做不了） |
 | 0600 socket 拒绝其他本机用户 | 建第二个账号，`su` 过去 `nc -U` 试探 |
-| DeepSeek `?q=` / `autosend=1` 端到端生效 | 真实打开一次带参 URL，观察问题是否进输入框、是否自动发送 |
-| Kimi 是否支持 `?q=` | 开一次 `www.kimi.com/?q=测试` 观察 |
+| DeepSeek `?q=` / `autosend=1` 端到端生效 | **已实测（2026-10-18，用户在本机浏览器）**：`https://chat.deepseek.com/?q=测试&autosend=1` 可以自动触发问答。站点生产 bundle 里的实现（`open_in_deepseek` 埋点、`q`/`prompt` 白名单、`autosend=1 && length<=800`、仅站点根路径、需已登录）见 `launcher-modes.md` §2.1 |
+| Kimi 是否支持带参预填/自动发送 | 旧域名 `kimi.moonshot.cn/_prefill_chat?prefill_prompt=…&send_immediately=true` 现在只 302 到 `www.kimi.com/_prefill_chat`，而当前 bundle 里该路由是 `{path:'/_prefill_chat', redirect:'home'}`、`send_immediately` 0 命中。仍缺一次**已登录浏览器**的实测才能说死（匿名 HTTP 路径已确认不支持） |
 | 跨 app 热键冲突时按键投递给谁 | 需辅助功能授权投递真实按键（本机 `AXIsProcessTrusted()==false`） |
 | 拼音输入法下 compose 提交行为 | 切到简体拼音，输入并回车 |
 | 插件子进程的 TCC 归属、quarantine 二进制能否 spawn | 各起一次带 quarantine 属性的子进程观察 |
