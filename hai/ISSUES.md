@@ -4,6 +4,7 @@
 
 | type | name | title | status | created_ts | updated_ts |
 |---|---|---|---|---|---|
+| bug | [launcher-detail-id-collision](./issue/2026-10-19-01-36-57-launcher-detail-id-collision.md) | 启动器 ⓘ 详情只按 id 匹配内置站点，自建同 id 站点会看到错误文案 | new | 2026-10-19T01:36:57+08:00 | 2026-10-19T01:36:57+08:00 |
 | docs | [zh-readme-launcher](./issue/2026-10-19-01-26-06-zh-readme-launcher.md) | README.zh-CN 缺启动器一节、tab 数仍是六个 | new | 2026-10-19T01:26:06+08:00 | 2026-10-19T01:26:06+08:00 |
 | bug | [terminal-reopen-stops-working](./issue/2026-10-01-13-18-16-terminal-reopen-stops-working.md) | 长时间运行后点击终端任务不再跳转（Claude 桌面版正常） | new | 2026-10-01T13:18:16-07:00 | 2026-10-01T13:18:29-07:00 |
 | feat | [launcher-mode-toggles](./issue/2026-10-19-00-52-28-launcher-mode-toggles.md) | 启动器模式可停用、内置 Kimi、设置页文案与滚动 | solved | 2026-10-19T00:52:28+08:00 | 2026-10-19T01:21:51+08:00 |
