@@ -66,6 +66,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
         content.setTheme(overlayStore.load())
         content.setShowsHints(overlayStore.loadShowsHints())
+        content.setLauncher(configuration.launcher.target)
         content.onOpenSettings = { [weak self] in
             self?.hideOverlay(reason: "overlay hidden to open settings")
             self?.settingsWindow?.show()
@@ -73,6 +74,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         content.onSelect = { [weak self] entry in self?.selectTask(entry) }
         content.onSelectNotification = { [weak self] id in self?.selectNotification(id: id) }
         content.onClearNotifications = { [weak self] in self?.clearNotifications() }
+        content.onCompose = { [weak self] url in self?.openLauncher(url) }
         content.onHoverChange = { [weak self] hovering in self?.setOverlayHovered(hovering) }
         content.onDismiss = { [weak self] in self?.hideOverlay(reason: "overlay dismissed") }
         content.onHeightChange = { [weak self] height in
@@ -234,6 +236,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         externalInbox.clear()
         refreshAgentUI()
         log("external notifications cleared")
+    }
+
+    /// The launcher (PLAN § Scope / 扩展机制 #3): open the typed question in the
+    /// browser and get out of the way. Nothing is sent — the site only prefills
+    /// its input box, so a stray Enter in island cannot post a message.
+    private func openLauncher(_ url: URL) {
+        NSWorkspace.shared.open(url)
+        hideOverlay(reason: "overlay hidden after opening the launcher")
+        log("launcher opened \(url.absoluteString)")
     }
 
     /// Which of `tasks` the user is looking at: the frontmost app is read here,

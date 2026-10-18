@@ -46,6 +46,9 @@ public enum TextKey: String, CaseIterable, Sendable {
     case searchOneTask
     case searchManyTasks
     case overlayHints
+    case overlayHintsWithLauncher
+    case launcherAsk
+    case launcherHints
 
     // Menu bar
     case summonOverlayWith
@@ -264,6 +267,9 @@ extension Localizer {
         .searchOneTask: "Search 1 task",
         .searchManyTasks: "Search %d tasks",
         .overlayHints: "↑↓ move   ↩ open   ⌘1–9 jump   ⌘, settings   esc close",
+        .overlayHintsWithLauncher: "↑↓ move   ↩ open   ⇥ ask   ⌘1–9 jump   ⌘, settings   esc close",
+        .launcherAsk: "Ask %@…",
+        .launcherHints: "↩ send to %@   ⇥ back to search   esc cancel",
 
         .summonOverlayWith: "Summon overlay (%@)",
         .summonHotkey: "Summon hotkey",
@@ -407,6 +413,9 @@ extension Localizer {
         .searchOneTask: "搜索 1 个任务",
         .searchManyTasks: "搜索 %d 个任务",
         .overlayHints: "↑↓ 选择   ↩ 打开   ⌘1–9 直达   ⌘, 设置   esc 关闭",
+        .overlayHintsWithLauncher: "↑↓ 选择   ↩ 打开   ⇥ 提问   ⌘1–9 直达   ⌘, 设置   esc 关闭",
+        .launcherAsk: "问 %@…",
+        .launcherHints: "↩ 发送到 %@   ⇥ 返回筛选   esc 取消",
 
         .summonOverlayWith: "召唤悬浮窗（%@）",
         .summonHotkey: "启用召唤快捷键",

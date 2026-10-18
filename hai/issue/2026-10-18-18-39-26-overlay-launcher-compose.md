@@ -2,9 +2,9 @@
 type: feat
 name: overlay-launcher-compose
 title: "悬浮窗启动器：输入一段话打开 DeepSeek"
-status: in-progress
+status: solved
 created_ts: 2026-10-18T18:39:26+08:00
-updated_ts: 2026-10-18T18:39:59+08:00
+updated_ts: 2026-10-18T18:47:57+08:00
 ---
 
 > 总纲：[ISSUES.md](../ISSUES.md)
@@ -51,3 +51,13 @@ updated_ts: 2026-10-18T18:39:59+08:00
 ## 2026-10-18T18:39:59+08:00: new -> in-progress
 
 Scope-check: PLAN § Scope / 扩展机制 第 3 条（启动器：悬浮窗输入一段话后打开指定 chat 智能体）；用户 2026-10-18 选定先做 P3。在 worktree overlay-launcher-compose 开工。
+
+## 2026-10-18T18:47:57+08:00: in-progress -> solved
+
+启动器第一段（P3a）已实现并 ship。
+
+- `IslandCore/Launcher.swift`：`LauncherTarget`（id/显示名/站点基址/查询参数）、`Launcher.url(for:query:)`（URLComponents 编码，空问题只开站点）、`LauncherSettings`（`ISLAND_LAUNCHER=off` 关闭）。内置目标只有 DeepSeek 一条，模型按多目标建。
+- 悬浮窗：键盘模式 `⇥` 在"筛选任务"与"提问"之间切换（compose 态输入框不再过滤任务、图标换成纸飞机、右侧显示目标名胶囊、footer 换成 compose 提示），`↩` 打开 `chat.deepseek.com/?q=…` 后收起，compose 态 `esc` 退回筛选；`ISLAND_LAUNCHER=off` 时 `⇥` 保持默认行为。
+- 文案：`launcherAsk` / `launcherHints` / `overlayHintsWithLauncher` 中英各一条；`ResolvedConfiguration` 打印 `launcher DeepSeek`。
+- 证据：`make verify` 全绿（432 测试、覆盖率 100，新增 7 条 `LauncherTests`）；URL 构造含 CJK / 空格 / `&`=#` 的转义断言。
+- 未验证：真人在浏览器里确认 `?q=` 是否进输入框（属方案 §8 `[未验证]`）；`⇥`/`↩` 的实时按键路径未做端到端（终端无辅助功能授权，GUI 自动化被 TCC 拒绝）。

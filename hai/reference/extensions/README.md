@@ -263,7 +263,8 @@ A 线（通道，对应 R1）与 B 线（面板与声明式插件，对应 R2/R3
 | P0 | A | UDS server + `hello`/`notify`/`query` + CLI `island notify` + socket 认领流程 + 新增外部通知行（D11） | `nc -U` 手测拿到回执；`island notify` 后悬浮窗出现该行；重启/被 kill 后能重新认领 socket 路径 |
 | P1 | A | `subscribe`/事件推送、限流、幂等窗口、目录权限 0700/0600、`server.bye`（token 暂缓，见 D12） | 3 客户端并发订阅各自收到事件；`ISLAND_IPC=off` 时 socket 文件不存在、`nc -U` 连接被拒 |
 | P2 | A | skill（智能体接入指南）+ 自测探针客户端 | 探针按 skill 走能接入；真实客户端 `dsh-system-notify` 等基础功能完成后再谈（决策 D8） |
-| P3 | B | 声明式 manifest + launcher section + DeepSeek URL 模板 + compose 输入 | 悬浮窗输入一句话 → 浏览器打开 `chat.deepseek.com/?q=…`（`autosend` 默认不带） |
+| P3a | B | launcher section + DeepSeek URL 模板 + compose 输入（**已实施**，issue `overlay-launcher-compose`） | 悬浮窗输入一句话 → 浏览器打开 `chat.deepseek.com/?q=…`（`autosend` 默认不带） |
+| P3b | B | 声明式 manifest（`plugin.json` 解析 + 启用/禁用 + `targets` 字段） | 投放一个 manifest，重启 island 后目标进启动器；`make verify` 全绿 |
 | P4 | B（依赖 P0/P1） | 进程插件（回连 socket）+ 双向请求帧 + 多全局键 + 已安装智能体探测 | 插件按 id 收事件并能被 island 反向调用；同进程注册 3 键全成功；探测结果与本机实际装机一致 |
 
 P0 为什么不先用文件收件箱：CLI 与协议编解码两边都要写，文件版会让传输层写两遍。文件收件箱保留为"主方案不可用时"的兜底，不单独做一期。`[推断:]` 中
@@ -271,6 +272,8 @@ P0 为什么不先用文件收件箱：CLI 与协议编解码两边都要写，�
 P0 的展示形态（D11，已确认）：外部通知进悬浮窗时**新增一类行**，与任务行并列、单独计数，不伪装成 AgentTask。理由：任务行有未读与点击语义，`AgentInbox` 的去重与排序不该被外部进程左右。P0 里这一行只显示来源与标题，点击只做"标记已读"；触发动作要等 B 线的启动器与 manifest。影响面在 `OverlaySelection` 的行模型与悬浮窗渲染。
 
 D11 落地后补充（issue `notification-list-scroll-clear`）：通知区标题行右侧有 `Clear all`；任务行与通知行共用一个滚动区，面板高度按屏幕封顶，内容超出时底部中间显示半透提示。通知不再按 N 截断，行数改由滚动区可视高度决定。
+
+P3a 落地后补充（issue `overlay-launcher-compose`，2026-10-18 用户选定先做这一段的用户可见部分）：P3 拆成两段。compose 不另开一行/一区，而是把键盘模式的标题行输入框切换用途——`⇥` 在"筛选任务"与"提问"之间切换，`↩` 打开 `https://chat.deepseek.com/?q=<问题>`；目标清单本轮内置 DeepSeek 一条（`LauncherTarget` 已按多目标建模），`ISLAND_LAUNCHER=off` 关闭入口。于是 §4.6 里"launcher section 不与任务行混排"这条**没有按原设计实现**：不为它动 `OverlaySelection` 的行模型，代价是同一时刻只能有一个目标（多目标要等 P3b 的 manifest 与目标切换键）。Kimi 仍未加入：`?q=` 支持情况属 §8 `[未验证]`。
 
 ---
 

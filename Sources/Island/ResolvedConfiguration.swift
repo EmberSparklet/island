@@ -14,6 +14,7 @@ struct ResolvedConfiguration {
     let taskLimit: Int
     let agentHome: URL
     let ipc: IPCSettings
+    let launcher: LauncherSettings
 
     init(environment: [String: String], store: HotkeyStoring = UserDefaultsHotkeyStore()) {
         hotkey = HotkeyConfiguration.resolve(
@@ -25,6 +26,7 @@ struct ResolvedConfiguration {
         taskLimit = TaskLimit.resolve(environment[Self.taskLimitEnvironmentKey])
         agentHome = AgentHome.resolve(environment[AgentHome.environmentKey])
         ipc = IPCSettings.resolve(environment: environment)
+        launcher = LauncherSettings.resolve(environment: environment)
     }
 
     var summary: String {
@@ -34,6 +36,7 @@ struct ResolvedConfiguration {
             "task limit        \(taskLimit)",
             "agent home        \(agentHome.path)",
             "ipc socket        \(ipc.socketURL?.path ?? "off")",
+            "launcher          \(launcher.target?.name ?? "off")",
         ]
         if hotkey.usedFallback {
             lines.append(

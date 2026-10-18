@@ -6,10 +6,11 @@ import IslandCore
 /// agent's icon, title, `directory • agent`, and its age.
 ///
 /// Two modes (see `setKeyboardMode`): when summoned by the user the panel is
-/// key, the whole header is a search field (with an `N new` pill on the
-/// right), and it takes typing, arrows, Enter, ⌘1–9, ⌘, and Esc; when it pops
+/// key, the whole header is a search field (with an `N new` pill on the right),
+/// and it takes typing, arrows, Enter, ⌘1–9, ⌘, and Esc; when it pops
 /// up by itself the header reads `● N new` next to the hotkey, it never takes
-/// focus, and rows are clicked with the mouse.
+/// focus, and rows are clicked with the mouse. `⇥` swaps the field between
+/// filtering tasks and composing a question for the launcher.
 @MainActor
 final class OverlayContentView: NSView, NSTextFieldDelegate {
     static let width: CGFloat = 520
@@ -39,6 +40,8 @@ final class OverlayContentView: NSView, NSTextFieldDelegate {
     var onSelectNotification: ((String) -> Void)?
     /// The notification section's `Clear all` button.
     var onClearNotifications: (() -> Void)?
+    /// A composed question is ready to be opened in the browser.
+    var onCompose: ((URL) -> Void)?
     /// The row count changed (typing filters the list), so the panel resizes.
     var onHeightChange: ((CGFloat) -> Void)?
 
@@ -49,6 +52,10 @@ final class OverlayContentView: NSView, NSTextFieldDelegate {
     private var notifications: [ExternalInbox.Entry] = []
     private var hotkey: HotkeySpec?
     private var isKeyboardMode = false
+    /// The launcher target `⇥` sends to; `nil` when the launcher is off.
+    private var launcherTarget: LauncherTarget?
+    /// True while the field holds a question instead of a task filter.
+    private var isComposing = false
     private(set) var showsHints = true
 
     private var showsFooter: Bool { isKeyboardMode && showsHints }
@@ -63,6 +70,7 @@ final class OverlayContentView: NSView, NSTextFieldDelegate {
     private let searchIcon = NSImageView()
     private let searchField = NSTextField()
     private let newPill = KeycapView()
+    private let launcherCap = KeycapView()
     private let hotkeyCap = KeycapView()
     /// Tasks and notifications scroll together; the panel never grows past
     /// `maxListHeight`.
@@ -134,9 +142,17 @@ final class OverlayContentView: NSView, NSTextFieldDelegate {
         render()
     }
 
+    /// Which chat site `⇥` opens, or `nil` to leave the key alone.
+    func setLauncher(_ target: LauncherTarget?) {
+        launcherTarget = target
+        if target == nil { isComposing = false }
+        render()
+    }
+
     /// Keyboard mode starts from an empty query with the first row highlighted.
     func setKeyboardMode(_ enabled: Bool) {
         isKeyboardMode = enabled
+        isComposing = false
         searchField.stringValue = ""
         selection.setQuery("")
         render()
@@ -299,17 +315,26 @@ final class OverlayContentView: NSView, NSTextFieldDelegate {
         searchField.isHidden = !isKeyboardMode
         searchField.isEditable = isKeyboardMode
         newPill.isHidden = !isKeyboardMode || unread == 0
+        launcherCap.isHidden = !isComposing
+        searchIcon.image = NSImage(
+            systemSymbolName: isComposing ? "paperplane" : "magnifyingglass",
+            accessibilityDescription: isComposing ? "ask" : "filter")
 
         hotkeyCap.set(text: hotkey?.displayString ?? "", palette: palette, fontSize: 11)
+        launcherCap.set(text: launcherTarget?.name ?? "", palette: palette, fontSize: 11)
         newPill.set(
             text: text, textColor: NSColor(palette.accent),
             background: NSColor(palette.selectionBackground), fontSize: 11)
         let count = selection.rows.count
         let placeholder: String
-        switch count {
-        case 0: placeholder = L10n.current.text(.searchTasks)
-        case 1: placeholder = L10n.current.text(.searchOneTask)
-        default: placeholder = L10n.current.formatted(.searchManyTasks, count)
+        if isComposing, let target = launcherTarget {
+            placeholder = L10n.current.formatted(.launcherAsk, target.name)
+        } else {
+            switch count {
+            case 0: placeholder = L10n.current.text(.searchTasks)
+            case 1: placeholder = L10n.current.text(.searchOneTask)
+            default: placeholder = L10n.current.formatted(.searchManyTasks, count)
+            }
         }
         searchField.placeholderAttributedString = NSAttributedString(
             string: placeholder,
@@ -321,7 +346,15 @@ final class OverlayContentView: NSView, NSTextFieldDelegate {
         footerBox.isHidden = !showsFooter
         footerHeightConstraint?.constant = showsFooter ? Self.footerHeight : 0
         bottomInsetConstraint?.constant = -(showsFooter ? Self.footerInset : Self.padding)
-        footer.stringValue = L10n.current.text(.overlayHints)
+        footer.stringValue = Self.footerText(launcher: launcherTarget, composing: isComposing)
+    }
+
+    /// The footer only mentions `⇥ ask` when the launcher can actually run.
+    private static func footerText(launcher: LauncherTarget?, composing: Bool) -> String {
+        if composing, let launcher {
+            return L10n.current.formatted(.launcherHints, launcher.name)
+        }
+        return L10n.current.text(launcher == nil ? .overlayHints : .overlayHintsWithLauncher)
     }
 
     private func applyPalette() {
@@ -401,7 +434,7 @@ final class OverlayContentView: NSView, NSTextFieldDelegate {
         status.font = .systemFont(ofSize: 13, weight: .semibold)
         spacer.setContentHuggingPriority(.defaultLow - 1, for: .horizontal)
         let header = NSStackView(views: [
-            dot, status, searchIcon, searchField, spacer, newPill, hotkeyCap,
+            dot, status, searchIcon, searchField, spacer, launcherCap, newPill, hotkeyCap,
         ])
         header.orientation = .horizontal
         header.distribution = .fill
@@ -508,6 +541,8 @@ final class OverlayContentView: NSView, NSTextFieldDelegate {
     // MARK: - Keyboard
 
     func controlTextDidChange(_ notification: Notification) {
+        // While composing the field holds the question, not a task filter.
+        guard !isComposing else { return }
         selection.setQuery(searchField.stringValue)
         render()
     }
@@ -523,13 +558,43 @@ final class OverlayContentView: NSView, NSTextFieldDelegate {
             selection.move(by: 1)
             refreshHighlight()
         case #selector(NSResponder.insertNewline(_:)):
-            if let entry = selection.selected { onSelect?(entry) }
+            if isComposing {
+                submitCompose()
+            } else if let entry = selection.selected {
+                onSelect?(entry)
+            }
+        case #selector(NSResponder.insertTab(_:)):
+            guard toggleComposing() else { return false }
         case #selector(NSResponder.cancelOperation(_:)):
-            onDismiss?()
+            if isComposing {
+                _ = toggleComposing()
+            } else {
+                onDismiss?()
+            }
         default:
             return false
         }
         return true
+    }
+
+    /// `⇥` switches between filtering tasks and asking the launcher. False when
+    /// the launcher is switched off, so the key keeps its default meaning.
+    private func toggleComposing() -> Bool {
+        guard launcherTarget != nil else { return false }
+        isComposing.toggle()
+        searchField.stringValue = ""
+        selection.setQuery("")
+        render()
+        return true
+    }
+
+    /// `↩` while composing: hand the question over. A blank one opens the site
+    /// itself, so the launcher doubles as a bookmark.
+    private func submitCompose() {
+        guard let target = launcherTarget,
+            let url = Launcher.url(for: target, query: searchField.stringValue)
+        else { return }
+        onCompose?(url)
     }
 
     /// ⌘1…⌘9 open the row with that keycap; ⌘, opens settings.

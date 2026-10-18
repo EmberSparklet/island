@@ -5,7 +5,7 @@
 | type | name | title | status | created_ts | updated_ts |
 |---|---|---|---|---|---|
 | bug | [terminal-reopen-stops-working](./issue/2026-10-01-13-18-16-terminal-reopen-stops-working.md) | 长时间运行后点击终端任务不再跳转（Claude 桌面版正常） | new | 2026-10-01T13:18:16-07:00 | 2026-10-01T13:18:29-07:00 |
-| feat | [overlay-launcher-compose](./issue/2026-10-18-18-39-26-overlay-launcher-compose.md) | 悬浮窗启动器：输入一段话打开 DeepSeek | in-progress | 2026-10-18T18:39:26+08:00 | 2026-10-18T18:39:59+08:00 |
+| feat | [overlay-launcher-compose](./issue/2026-10-18-18-39-26-overlay-launcher-compose.md) | 悬浮窗启动器：输入一段话打开 DeepSeek | solved | 2026-10-18T18:39:26+08:00 | 2026-10-18T18:47:57+08:00 |
 | feat | [notification-list-scroll-clear](./issue/2026-10-18-18-11-51-notification-list-scroll-clear.md) | 外部通知行：全部清除 + 列表滚动与翻页提示 | solved | 2026-10-18T18:11:51+08:00 | 2026-10-18T18:19:14+08:00 |
 | feat | [island-ipc-p0](./issue/2026-10-18-17-39-01-island-ipc-p0.md) | 入站通知通道 P0：UDS server + island notify + 外部通知行 | solved | 2026-10-18T17:39:01+08:00 | 2026-10-18T17:53:20+08:00 |
 | feat | [add-liquid-glass-theme](./issue/2026-10-18-14-32-34-add-liquid-glass-theme.md) | 新增液态玻璃主题 | solved | 2026-10-18T14:32:34+08:00 | 2026-10-18T14:39:54+08:00 |
