@@ -38,7 +38,7 @@ Requires macOS 13+.
 - `Settings…` has six tabs: `General` (hotkey) / `Appearance` (theme, keyboard hints) / `Notifications` (popups) / `Agents` / `Updates` / `Feedback`
 - `Settings…` → `Feedback`: write a note and send it by email, as a prefilled GitHub issue, or copy it — your island and macOS versions are attached
 - `Settings…` → `Agents` lists every supported agent and scenario (e.g. Claude Code's terminal CLI / editor extension / inside the Claude app / SDK; Codex's desktop app / terminal CLI / `codex exec`), how each is detected, and what a click does. Every scenario and every agent can be turned off individually — disabled ones aren't counted, don't pop up, and don't appear in the list
-- Themes: System (light Sand / dark Lagoon) / Lagoon / Coral / Sand / Midnight, applied instantly; keyboard hints can be hidden
+- Themes: System (light Sand / dark Lagoon) / Lagoon / Coral / Sand / Midnight / Liquid Glass, applied instantly; keyboard hints can be hidden. Liquid Glass uses macOS 26's system material and rounds all four corners; older systems fall back to the same low-alpha tint over vibrancy
 - Bilingual interface: follows the system language by default, and can be pinned to Chinese or `English` under `Settings…` → `Appearance` → `Language`. The menu bar and panel update at once; reopen the settings window to refresh it
 - The panel never shows up in the window switcher
 - Menu bar icon: see at a glance that it's running, summon manually, toggle or change the hotkey, toggle launch at login, quit

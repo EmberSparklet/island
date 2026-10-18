@@ -49,6 +49,8 @@ public enum OverlayTheme: String, CaseIterable, Sendable {
     case coral
     case sand
     case midnight
+    /// The system Liquid Glass material; the palette only tints it.
+    case liquidGlass
 
     public static let fallback = OverlayTheme.system
 
@@ -69,6 +71,7 @@ public enum OverlayTheme: String, CaseIterable, Sendable {
         case .coral: return L10n.current.text(.themeCoral)
         case .sand: return L10n.current.text(.themeSand)
         case .midnight: return L10n.current.text(.themeMidnight)
+        case .liquidGlass: return L10n.current.text(.themeLiquidGlass)
         }
     }
 
@@ -80,6 +83,7 @@ public enum OverlayTheme: String, CaseIterable, Sendable {
         case .coral: return Self.coralPalette
         case .sand: return Self.sandPalette
         case .midnight: return Self.midnightPalette
+        case .liquidGlass: return Self.liquidGlassPalette
         }
     }
 
@@ -124,6 +128,13 @@ public enum OverlayTheme: String, CaseIterable, Sendable {
     private static let midnightPalette = palette(
         isDark: true, background: ThemeColor(hex: 0x000000, alpha: 0.95), accent: 0x9B9BFF,
         title: ThemeColor(hex: 0xF5F5F7), subtitle: 0x8E8E93, muted: 0x6C6C70)
+
+    /// The barest tint over macOS 26's Liquid Glass: low background alpha so the
+    /// material supplies the colour, an icy accent, and a bright rim to keep the
+    /// capsule readable. On older systems the same palette sits over vibrancy.
+    private static let liquidGlassPalette = palette(
+        isDark: true, background: ThemeColor(hex: 0x0B1220, alpha: 0.22), accent: 0x8FE3FF,
+        title: ThemeColor(hex: 0xFFFFFF), subtitle: 0xC3CEDA, muted: 0x8B98A8)
 }
 
 /// Remembers the overlay preferences picked in settings across launches.

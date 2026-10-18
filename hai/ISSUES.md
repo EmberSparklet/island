@@ -5,6 +5,7 @@
 | type | name | title | status | created_ts | updated_ts |
 |---|---|---|---|---|---|
 | bug | [terminal-reopen-stops-working](./issue/2026-10-01-13-18-16-terminal-reopen-stops-working.md) | 长时间运行后点击终端任务不再跳转（Claude 桌面版正常） | new | 2026-10-01T13:18:16-07:00 | 2026-10-01T13:18:29-07:00 |
+| feat | [add-liquid-glass-theme](./issue/2026-10-18-14-32-34-add-liquid-glass-theme.md) | 新增液态玻璃主题 | solved | 2026-10-18T14:32:34+08:00 | 2026-10-18T14:39:54+08:00 |
 | feat | [add-chinese-localization](./issue/2026-10-18-14-07-13-add-chinese-localization.md) | 界面支持中英双语 | solved | 2026-10-18T14:07:13+08:00 | 2026-10-18T14:30:26+08:00 |
 | bug | [fix-coverage-test-binary](./issue/2026-10-18-14-01-45-fix-coverage-test-binary.md) | coverage 脚本在新 SwiftPM 布局下找不到测试二进制 | solved | 2026-10-18T14:01:45+08:00 | 2026-10-18T14:05:16+08:00 |
 | feat | [app-icon](./issue/2026-09-28-21-10-17-app-icon.md) | 补 app 图标：Lagoon 胶囊（方案 A） | solved | 2026-09-28T21:10:17-07:00 | 2026-09-28T21:18:20-07:00 |

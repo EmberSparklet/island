@@ -115,6 +115,7 @@ public enum TextKey: String, CaseIterable, Sendable {
     case themeCoral
     case themeSand
     case themeMidnight
+    case themeLiquidGlass
 
     // Agents tab
     case agentsFootnote
@@ -327,6 +328,7 @@ extension Localizer {
         .themeCoral: "Coral",
         .themeSand: "Sand",
         .themeMidnight: "Midnight",
+        .themeLiquidGlass: "Liquid Glass",
 
         .agentsFootnote:
             "island only watches what is switched on. Runs switched off are neither counted\nnor listed (island --scan-agents still shows them, marked off).",
@@ -464,6 +466,7 @@ extension Localizer {
         .themeCoral: "珊瑚",
         .themeSand: "沙滩",
         .themeMidnight: "午夜",
+        .themeLiquidGlass: "液态玻璃",
 
         .agentsFootnote:
             "island 只监视已打开的场景。关闭的场景既不计数也不列出（island --scan-agents 仍会显示它们，并标记为已关闭）。",

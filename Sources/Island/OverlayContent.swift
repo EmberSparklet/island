@@ -40,6 +40,8 @@ final class OverlayContentView: NSView, NSTextFieldDelegate {
     private var showsFooter: Bool { isKeyboardMode && showsHints }
 
     private let blurView = NSVisualEffectView()
+    /// The Liquid Glass background; only the glass theme on macOS 26+ shows it.
+    private let glassView = OverlayGlassView()
     private let shape = CapsuleShapeView()
     private let dot = NSView()
     private let status = NSTextField(labelWithString: "")
@@ -206,12 +208,32 @@ final class OverlayContentView: NSView, NSTextFieldDelegate {
         palette = theme.palette(systemIsDark: effectiveAppearance.isDark)
         blurView.appearance = NSAppearance(named: palette.isDark ? .darkAqua : .aqua)
         blurView.material = palette.isDark ? .hudWindow : .popover
+        applyBackground()
+        shape.roundsAllCorners = usesLiquidGlass
         shape.fill = NSColor(palette.background)
         shape.stroke = NSColor(palette.border)
         searchField.textColor = NSColor(palette.title)
         searchIcon.contentTintColor = NSColor(palette.subtitle)
         footer.textColor = NSColor(palette.muted)
         render()
+    }
+
+    /// Liquid Glass needs macOS 26; below that the glass theme is its palette
+    /// over vibrancy, like every other theme.
+    private var usesLiquidGlass: Bool {
+        guard theme == .liquidGlass else { return false }
+        if #available(macOS 26.0, *) { return true }
+        return false
+    }
+
+    /// The two backgrounds trade places: exactly one shows, and the glass one
+    /// carries the palette's tint rather than its own material.
+    private func applyBackground() {
+        glassView.isHidden = !usesLiquidGlass
+        blurView.isHidden = usesLiquidGlass
+        guard usesLiquidGlass else { return }
+        glassView.tintColor = NSColor(palette.background)
+        glassView.cornerRadius = CapsuleShapeView.bottomRadius
     }
 
     override func viewDidChangeEffectiveAppearance() {
@@ -221,18 +243,23 @@ final class OverlayContentView: NSView, NSTextFieldDelegate {
 
     override func layout() {
         super.layout()
-        blurView.maskImage = CapsuleShapeView.maskImage(size: bounds.size)
+        blurView.maskImage = CapsuleShapeView.maskImage(
+            size: bounds.size, roundsAllCorners: usesLiquidGlass)
     }
 
     // MARK: - Layout
 
     private func build() {
+        // Both backgrounds fill the view and sit under everything else, so no
+        // content may live inside either of them.
+        glassView.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(glassView)
         blurView.blendingMode = .behindWindow
         blurView.state = .active
         blurView.translatesAutoresizingMaskIntoConstraints = false
         addSubview(blurView)
         shape.translatesAutoresizingMaskIntoConstraints = false
-        blurView.addSubview(shape)
+        addSubview(shape)
 
         dot.wantsLayer = true
         dot.layer?.cornerRadius = 4
@@ -275,35 +302,38 @@ final class OverlayContentView: NSView, NSTextFieldDelegate {
         footerBox.translatesAutoresizingMaskIntoConstraints = false
         footerBox.addSubview(footer)
 
-        for view in [header, list, footerBox] { blurView.addSubview(view) }
+        for view in [header, list, footerBox] { addSubview(view) }
 
         let footerHeight = footerBox.heightAnchor.constraint(equalToConstant: 0)
         footerHeightConstraint = footerHeight
         let bottomInset = footerBox.bottomAnchor.constraint(
-            equalTo: blurView.bottomAnchor, constant: -Self.padding)
+            equalTo: bottomAnchor, constant: -Self.padding)
         bottomInsetConstraint = bottomInset
         let pad = Self.padding
         NSLayoutConstraint.activate([
+            glassView.leadingAnchor.constraint(equalTo: leadingAnchor),
+            glassView.trailingAnchor.constraint(equalTo: trailingAnchor),
+            glassView.topAnchor.constraint(equalTo: topAnchor),
+            glassView.bottomAnchor.constraint(equalTo: bottomAnchor),
             blurView.leadingAnchor.constraint(equalTo: leadingAnchor),
             blurView.trailingAnchor.constraint(equalTo: trailingAnchor),
             blurView.topAnchor.constraint(equalTo: topAnchor),
             blurView.bottomAnchor.constraint(equalTo: bottomAnchor),
-            shape.leadingAnchor.constraint(equalTo: blurView.leadingAnchor),
-            shape.trailingAnchor.constraint(equalTo: blurView.trailingAnchor),
-            shape.topAnchor.constraint(equalTo: blurView.topAnchor),
-            shape.bottomAnchor.constraint(equalTo: blurView.bottomAnchor),
+            shape.leadingAnchor.constraint(equalTo: leadingAnchor),
+            shape.trailingAnchor.constraint(equalTo: trailingAnchor),
+            shape.topAnchor.constraint(equalTo: topAnchor),
+            shape.bottomAnchor.constraint(equalTo: bottomAnchor),
 
             dot.widthAnchor.constraint(equalToConstant: 8),
             dot.heightAnchor.constraint(equalToConstant: 8),
             searchField.widthAnchor.constraint(greaterThanOrEqualToConstant: 120),
-            header.leadingAnchor.constraint(equalTo: blurView.leadingAnchor, constant: pad + 12),
-            header.trailingAnchor.constraint(
-                equalTo: blurView.trailingAnchor, constant: -pad - 12),
-            header.topAnchor.constraint(equalTo: blurView.topAnchor, constant: pad),
+            header.leadingAnchor.constraint(equalTo: leadingAnchor, constant: pad + 12),
+            header.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -pad - 12),
+            header.topAnchor.constraint(equalTo: topAnchor, constant: pad),
             header.heightAnchor.constraint(equalToConstant: Self.headerHeight),
 
-            list.leadingAnchor.constraint(equalTo: blurView.leadingAnchor, constant: pad),
-            list.trailingAnchor.constraint(equalTo: blurView.trailingAnchor, constant: -pad),
+            list.leadingAnchor.constraint(equalTo: leadingAnchor, constant: pad),
+            list.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -pad),
             list.topAnchor.constraint(equalTo: header.bottomAnchor),
 
             footerBox.leadingAnchor.constraint(equalTo: list.leadingAnchor),
@@ -394,19 +424,29 @@ final class CapsuleShapeView: NSView {
 
     var fill = NSColor.clear { didSet { needsDisplay = true } }
     var stroke = NSColor.clear { didSet { needsDisplay = true } }
+    /// The glass theme rounds every corner: `NSGlassEffectView` cannot be
+    /// clipped to a flat top, so the outline follows the glass instead of
+    /// disagreeing with it.
+    var roundsAllCorners = false { didSet { needsDisplay = true } }
 
     override func draw(_ dirtyRect: NSRect) {
         fill.setFill()
-        Self.path(in: bounds, closed: true).fill()
+        Self.path(in: bounds, closed: true, roundsAllCorners: roundsAllCorners).fill()
         stroke.setStroke()
-        let outline = Self.path(in: bounds.insetBy(dx: 0.5, dy: 0.5), closed: false)
+        let outline = Self.path(
+            in: bounds.insetBy(dx: 0.5, dy: 0.5), closed: false, roundsAllCorners: roundsAllCorners)
         outline.lineWidth = 1
         outline.stroke()
     }
 
     /// Open paths leave out the top edge, which touches the menu bar.
-    static func path(in rect: NSRect, closed: Bool) -> NSBezierPath {
+    static func path(
+        in rect: NSRect, closed: Bool, roundsAllCorners: Bool = false
+    ) -> NSBezierPath {
         let radius = min(bottomRadius, rect.height / 2, rect.width / 2)
+        if roundsAllCorners {
+            return NSBezierPath(roundedRect: rect, xRadius: radius, yRadius: radius)
+        }
         let path = NSBezierPath()
         path.move(to: NSPoint(x: rect.minX, y: rect.maxY))
         path.line(to: NSPoint(x: rect.minX, y: rect.minY + radius))
@@ -422,13 +462,61 @@ final class CapsuleShapeView: NSView {
         return path
     }
 
-    /// Clips the blur to the same shape (a layer mask does not clip
-    /// behind-window vibrancy).
-    static func maskImage(size: NSSize) -> NSImage {
+    /// Clips the vibrancy to the same shape (a plain layer mask does not clip
+    /// behind-window blending).
+    static func maskImage(size: NSSize, roundsAllCorners: Bool = false) -> NSImage {
         NSImage(size: size, flipped: false) { rect in
             NSColor.black.setFill()
-            path(in: rect, closed: true).fill()
+            path(in: rect, closed: true, roundsAllCorners: roundsAllCorners).fill()
             return true
+        }
+    }
+}
+
+/// The Liquid Glass background. Where `NSGlassEffectView` exists (macOS 26+)
+/// this wraps one; below that it stays empty and its setters are no-ops, so
+/// callers never need an availability check of their own.
+@MainActor
+final class OverlayGlassView: NSView {
+    private let glass: NSView?
+
+    /// Standard glass: the tint laid over it is already low-alpha, so the
+    /// material supplies most of the colour.
+    override init(frame frameRect: NSRect) {
+        if #available(macOS 26.0, *) {
+            let view = NSGlassEffectView()
+            view.style = .regular
+            glass = view
+        } else {
+            glass = nil
+        }
+        super.init(frame: frameRect)
+        guard let glass else { return }
+        glass.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(glass)
+        NSLayoutConstraint.activate([
+            glass.leadingAnchor.constraint(equalTo: leadingAnchor),
+            glass.trailingAnchor.constraint(equalTo: trailingAnchor),
+            glass.topAnchor.constraint(equalTo: topAnchor),
+            glass.bottomAnchor.constraint(equalTo: bottomAnchor),
+        ])
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("OverlayGlassView is created in code only")
+    }
+
+    var cornerRadius: CGFloat = 0 {
+        didSet {
+            guard #available(macOS 26.0, *), let glass = glass as? NSGlassEffectView else { return }
+            glass.cornerRadius = cornerRadius
+        }
+    }
+
+    var tintColor: NSColor? {
+        didSet {
+            guard #available(macOS 26.0, *), let glass = glass as? NSGlassEffectView else { return }
+            glass.tintColor = tintColor
         }
     }
 }

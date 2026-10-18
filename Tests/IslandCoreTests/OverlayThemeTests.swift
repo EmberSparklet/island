@@ -26,7 +26,20 @@ final class OverlayThemeTests: XCTestCase {
     func testThemeNamesAndOrder() {
         XCTAssertEqual(
             OverlayTheme.allCases.map(\.displayName),
-            ["System", "Lagoon", "Coral", "Sand", "Midnight"])
+            ["System", "Lagoon", "Coral", "Sand", "Midnight", "Liquid Glass"])
+    }
+
+    /// Liquid Glass leans on the material, so it tints far less than the other
+    /// dark themes do.
+    func testLiquidGlassTintsLightly() {
+        let glass = OverlayTheme.liquidGlass.palette(systemIsDark: false)
+
+        XCTAssertTrue(glass.isDark)
+        for theme in [OverlayTheme.lagoon, .coral, .midnight] {
+            XCTAssertLessThan(
+                glass.background.alpha, theme.palette(systemIsDark: false).background.alpha,
+                theme.rawValue)
+        }
     }
 
     func testSystemFollowsTheAppearance() {
