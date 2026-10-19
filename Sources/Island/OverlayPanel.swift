@@ -24,7 +24,11 @@ final class OverlayPanel: NSPanel {
         collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary, .ignoresCycle]
         backgroundColor = .clear
         isOpaque = false
-        hasShadow = true
+        // No window shadow: for a transparent borderless window the system draws
+        // it from the frame rectangle, so its hard contact line traces square
+        // corners that stick out of the capsule's rounded ones. The glass edges
+        // and the outline carry the panel on their own.
+        hasShadow = false
         hidesOnDeactivate = false
         isMovableByWindowBackground = false
         animationBehavior = .utilityWindow
