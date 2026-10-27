@@ -71,8 +71,6 @@ final class OverlayContentView: NSView, NSTextFieldDelegate {
     private var showsFooter: Bool { isKeyboardMode && showsHints }
 
     private let blurView = NSVisualEffectView()
-    /// The Liquid Glass background; only the glass theme on macOS 26+ shows it.
-    private let glassView = OverlayGlassView()
     private let shape = CapsuleShapeView()
     private let dot = NSView()
     private let status = NSTextField(labelWithString: "")
@@ -376,8 +374,7 @@ final class OverlayContentView: NSView, NSTextFieldDelegate {
         palette = theme.palette(systemIsDark: effectiveAppearance.isDark)
         blurView.appearance = NSAppearance(named: palette.isDark ? .darkAqua : .aqua)
         blurView.material = palette.isDark ? .hudWindow : .popover
-        applyBackground()
-        shape.roundsAllCorners = usesLiquidGlass
+        shape.roundsAllCorners = roundsAllCorners
         shape.fill = NSColor(palette.background)
         shape.stroke = NSColor(palette.border)
         searchField.textColor = NSColor(palette.title)
@@ -387,23 +384,13 @@ final class OverlayContentView: NSView, NSTextFieldDelegate {
         render()
     }
 
-    /// Liquid Glass needs macOS 26; below that the glass theme is its palette
-    /// over vibrancy, like every other theme.
-    private var usesLiquidGlass: Bool {
-        guard theme == .liquidGlass else { return false }
-        if #available(macOS 26.0, *) { return true }
-        return false
-    }
-
-    /// The two backgrounds trade places: exactly one shows, and the glass one
-    /// carries the palette's tint rather than its own material.
-    private func applyBackground() {
-        glassView.isHidden = !usesLiquidGlass
-        blurView.isHidden = usesLiquidGlass
-        guard usesLiquidGlass else { return }
-        glassView.tintColor = NSColor(palette.background)
-        glassView.cornerRadius = CapsuleShapeView.bottomRadius
-    }
+    /// The glass theme rounds every corner; the others hang from the menu bar
+    /// with a flat top.
+    ///
+    /// Every theme is vibrancy over the same capsule: the Liquid Glass material
+    /// drew a shadow of its own outside the capsule, which no window geometry
+    /// could get rid of (issue glass-shadow-clipped-panel-edge).
+    private var roundsAllCorners: Bool { theme == .liquidGlass }
 
     override func viewDidChangeEffectiveAppearance() {
         super.viewDidChangeEffectiveAppearance()
@@ -413,16 +400,14 @@ final class OverlayContentView: NSView, NSTextFieldDelegate {
     override func layout() {
         super.layout()
         blurView.maskImage = CapsuleShapeView.maskImage(
-            size: bounds.size, roundsAllCorners: usesLiquidGlass)
+            size: bounds.size, roundsAllCorners: roundsAllCorners)
     }
 
     // MARK: - Layout
 
     private func build() {
-        // Both backgrounds fill the view and sit under everything else, so no
-        // content may live inside either of them.
-        glassView.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(glassView)
+        // The background fills the view and sits under everything else, so no
+        // content may live inside it.
         blurView.blendingMode = .behindWindow
         blurView.state = .active
         blurView.translatesAutoresizingMaskIntoConstraints = false
@@ -503,10 +488,6 @@ final class OverlayContentView: NSView, NSTextFieldDelegate {
         scrollHeightConstraint = scrollHeight
         let pad = Self.padding
         NSLayoutConstraint.activate([
-            glassView.leadingAnchor.constraint(equalTo: leadingAnchor),
-            glassView.trailingAnchor.constraint(equalTo: trailingAnchor),
-            glassView.topAnchor.constraint(equalTo: topAnchor),
-            glassView.bottomAnchor.constraint(equalTo: bottomAnchor),
             blurView.leadingAnchor.constraint(equalTo: leadingAnchor),
             blurView.trailingAnchor.constraint(equalTo: trailingAnchor),
             blurView.topAnchor.constraint(equalTo: topAnchor),
@@ -685,9 +666,8 @@ final class CapsuleShapeView: NSView {
 
     var fill = NSColor.clear { didSet { needsDisplay = true } }
     var stroke = NSColor.clear { didSet { needsDisplay = true } }
-    /// The glass theme rounds every corner: `NSGlassEffectView` cannot be
-    /// clipped to a flat top, so the outline follows the glass instead of
-    /// disagreeing with it.
+    /// The glass theme draws a pill, rounded at every corner; the rest hang from
+    /// the menu bar with a flat top.
     var roundsAllCorners = false { didSet { needsDisplay = true } }
 
     override func draw(_ dirtyRect: NSRect) {
@@ -730,54 +710,6 @@ final class CapsuleShapeView: NSView {
             NSColor.black.setFill()
             path(in: rect, closed: true, roundsAllCorners: roundsAllCorners).fill()
             return true
-        }
-    }
-}
-
-/// The Liquid Glass background. Where `NSGlassEffectView` exists (macOS 26+)
-/// this wraps one; below that it stays empty and its setters are no-ops, so
-/// callers never need an availability check of their own.
-@MainActor
-final class OverlayGlassView: NSView {
-    private let glass: NSView?
-
-    /// Standard glass: the tint laid over it is already low-alpha, so the
-    /// material supplies most of the colour.
-    override init(frame frameRect: NSRect) {
-        if #available(macOS 26.0, *) {
-            let view = NSGlassEffectView()
-            view.style = .regular
-            glass = view
-        } else {
-            glass = nil
-        }
-        super.init(frame: frameRect)
-        guard let glass else { return }
-        glass.translatesAutoresizingMaskIntoConstraints = false
-        addSubview(glass)
-        NSLayoutConstraint.activate([
-            glass.leadingAnchor.constraint(equalTo: leadingAnchor),
-            glass.trailingAnchor.constraint(equalTo: trailingAnchor),
-            glass.topAnchor.constraint(equalTo: topAnchor),
-            glass.bottomAnchor.constraint(equalTo: bottomAnchor),
-        ])
-    }
-
-    required init?(coder: NSCoder) {
-        fatalError("OverlayGlassView is created in code only")
-    }
-
-    var cornerRadius: CGFloat = 0 {
-        didSet {
-            guard #available(macOS 26.0, *), let glass = glass as? NSGlassEffectView else { return }
-            glass.cornerRadius = cornerRadius
-        }
-    }
-
-    var tintColor: NSColor? {
-        didSet {
-            guard #available(macOS 26.0, *), let glass = glass as? NSGlassEffectView else { return }
-            glass.tintColor = tintColor
         }
     }
 }

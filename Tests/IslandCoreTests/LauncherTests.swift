@@ -304,6 +304,28 @@ final class LauncherTests: XCTestCase {
         XCTAssertNil(Launcher.detail(for: target))
     }
 
+    /// The note is keyed on id *and* host. A site the user added under a
+    /// built-in id -- deleting the built-in row first frees the slug -- usually
+    /// points somewhere else, and Kimi's measured note would be a lie about it.
+    /// A target still pointing at the measured host keeps the note, however the
+    /// rest of the mode was edited.
+    func testADetailedNoteNeedsBothTheBuiltInIDAndHost() {
+        XCTAssertNil(Launcher.detail(for: kimi))
+        XCTAssertNil(
+            Launcher.detail(
+                for: LauncherTarget(
+                    id: Launcher.deepSeek.id, name: "DeepSeek",
+                    baseURL: URL(string: "https://www.deepseek.com/")!, queryItem: "q")))
+        XCTAssertEqual(
+            Launcher.detail(for: deepSeekFromEnvironment),
+            L10n.current.text(.launcherDetailDeepSeek))
+        let editedKimi = LauncherTarget(
+            id: Launcher.kimi.id, name: "Kimi mine",
+            baseURL: URL(string: "https://kimi.moonshot.cn/_prefill_chat?ref=mine")!,
+            queryItem: "q")
+        XCTAssertEqual(Launcher.detail(for: editedKimi), L10n.current.text(.launcherDetailKimi))
+    }
+
     func testSanitizingPutsTheTaskFilterBackInFront() {
         XCTAssertEqual(
             Launcher.sanitized([.target(Launcher.deepSeek)]),

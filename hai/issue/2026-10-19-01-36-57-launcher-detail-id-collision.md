@@ -2,9 +2,9 @@
 type: bug
 name: launcher-detail-id-collision
 title: "启动器 ⓘ 详情只按 id 匹配内置站点，自建同 id 站点会看到错误文案"
-status: new
+status: solved
 created_ts: 2026-10-19T01:36:57+08:00
-updated_ts: 2026-10-19T01:36:57+08:00
+updated_ts: 2026-10-27T22:39:06+08:00
 ---
 
 > 总纲：[ISSUES.md](../ISSUES.md)
@@ -31,7 +31,20 @@ P3d 独立复核（commit `913346b`）的提示条之一：
 
 ## 备注
 
+- Scope-check: PLAN § Scope / 扩展机制 #3（启动器）—— 收紧既有匹配条件属该功能的 bug 修复，不触发 Ask first
 - 本 issue 不在 P3d 的提审范围内，P3d 按复核结论原样 ship（`913346b`），此条留给后续判断
 - 全程在独立 worktree（`../.worktree/<repo>-<slug>`）中完成，合回 master 前 `make verify` 全过，流程见 AGENTS.md / Workflow / Worktree 与 Ship
 
 # History
+
+## 2026-10-27T22:39:06+08:00: new -> in-progress
+
+开工：把 `Launcher.detail(for:)` 的匹配从 id 收紧为 id+host，先补失败用例再改实现。
+
+## 2026-10-27T22:39:06+08:00: in-progress -> solved
+
+改法：`Launcher.detail(for:)` 的 case 加 `where` 条件，要求 `target.id` 与 `target.baseURL.host` 同时命中内置 DeepSeek / Kimi 才返回文案；同 id 不同 host 返回 `nil`。IslandCore 一处改动。
+
+用例：`testADetailedNoteNeedsBothTheBuiltInIDAndHost`（同 id 不同 host → `nil`；同 id 同 host → 命中内置文案），实现前先红后绿。
+
+验证：worktree 内 `make verify` 全绿（build / fmt / lint / test / coverage / cycles / issue-check）。

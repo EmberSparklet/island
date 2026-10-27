@@ -4,10 +4,14 @@
 
 | type | name | title | status | created_ts | updated_ts |
 |---|---|---|---|---|---|
-| bug | [launcher-detail-id-collision](./issue/2026-10-19-01-36-57-launcher-detail-id-collision.md) | 启动器 ⓘ 详情只按 id 匹配内置站点，自建同 id 站点会看到错误文案 | new | 2026-10-19T01:36:57+08:00 | 2026-10-19T01:36:57+08:00 |
-| docs | [zh-readme-launcher](./issue/2026-10-19-01-26-06-zh-readme-launcher.md) | README.zh-CN 缺启动器一节、tab 数仍是六个 | new | 2026-10-19T01:26:06+08:00 | 2026-10-19T01:26:06+08:00 |
-| bug | [terminal-reopen-stops-working](./issue/2026-10-01-13-18-16-terminal-reopen-stops-working.md) | 长时间运行后点击终端任务不再跳转（Claude 桌面版正常） | new | 2026-10-01T13:18:16-07:00 | 2026-10-01T13:18:29-07:00 |
-| bug | [overlay-shadow-square-corners](./issue/2026-10-19-20-49-53-overlay-shadow-square-corners.md) | 悬浮窗阴影按窗口矩形绘制，底部圆角处露出直角黑线 | solved | 2026-10-19T20:49:53+08:00 | 2026-10-19T20:52:17+08:00 |
+| bug | [overlay-shadow-square-corners](./issue/2026-10-19-20-49-53-overlay-shadow-square-corners.md) | 悬浮窗阴影按窗口矩形绘制，底部圆角处露出直角黑线 | solved | 2026-10-19T20:49:53+08:00 | 2026-10-27T23:56:30+08:00 |
+| bug | [glass-shadow-clipped-panel-edge](./issue/2026-10-19-21-47-53-glass-shadow-clipped-panel-edge.md) | 悬浮窗四个圆角露出方形阴影（Liquid Glass 阴影被窗口矩形裁掉） | solved | 2026-10-19T21:47:53+08:00 | 2026-10-27T23:56:30+08:00 |
+| docs | [docs-tidy-and-privacy](./issue/2026-10-27-23-53-39-docs-tidy-and-privacy.md) | 整理文档，清掉本地路径与个人标识 | solved | 2026-10-27T23:53:39+08:00 | 2026-10-27T23:56:01+08:00 |
+| docs | [zh-readme-launcher](./issue/2026-10-19-01-26-06-zh-readme-launcher.md) | README.zh-CN 缺启动器一节、tab 数仍是六个 | solved | 2026-10-19T01:26:06+08:00 | 2026-10-27T23:55:17+08:00 |
+| bug | [terminal-reopen-stops-working](./issue/2026-10-01-13-18-16-terminal-reopen-stops-working.md) | 长时间运行后点击终端任务不再跳转（Claude 桌面版正常） | solved | 2026-10-01T13:18:16-07:00 | 2026-10-27T22:47:16+08:00 |
+| bug | [ipc-permission-fail-closed](./issue/2026-10-27-22-38-13-ipc-permission-fail-closed.md) | IPC 目录与 socket 权限收紧失败被静默吞掉 | solved | 2026-10-27T22:38:13+08:00 | 2026-10-27T22:42:28+08:00 |
+| bug | [launcher-detail-id-collision](./issue/2026-10-19-01-36-57-launcher-detail-id-collision.md) | 启动器 ⓘ 详情只按 id 匹配内置站点，自建同 id 站点会看到错误文案 | solved | 2026-10-19T01:36:57+08:00 | 2026-10-27T22:39:06+08:00 |
+| bug | [overlay-edit-shortcuts](./issue/2026-10-19-23-54-58-overlay-edit-shortcuts.md) | 悬浮窗输入框不支持 ⌘C / ⌘V / ⌘Z | solved | 2026-10-19T23:54:58+08:00 | 2026-10-20T00:01:27+08:00 |
 | feat | [launcher-mode-toggles](./issue/2026-10-19-00-52-28-launcher-mode-toggles.md) | 启动器模式可停用、内置 Kimi、设置页文案与滚动 | solved | 2026-10-19T00:52:28+08:00 | 2026-10-19T01:21:51+08:00 |
 | feat | [launcher-modes](./issue/2026-10-18-22-37-48-launcher-modes.md) | 启动器模式可配：设置页拖拽排序 + 每模式附加参数 | solved | 2026-10-18T22:37:48+08:00 | 2026-10-18T23:44:03+08:00 |
 | feat | [launcher-targets](./issue/2026-10-18-21-09-09-launcher-targets.md) | 启动器目标可选可配 | solved | 2026-10-18T21:09:09+08:00 | 2026-10-18T21:19:15+08:00 |

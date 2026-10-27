@@ -2,7 +2,7 @@
 
 > 调研需求 2 的举例：悬浮窗快速输入一段话，然后打开指定 chat 智能体。
 > 调研需求 3：面板展示已安装智能体、快速切换、内部快捷键。
-> 工作目录 `/Users/boss/code/z-island`，只读调研，未改动仓库内任何 tracked 文件（`git status --porcelain` 为空）。
+> 工作目录为 island 仓库根目录，只读调研，未改动仓库内任何 tracked 文件（`git status --porcelain` 为空）。
 > 实测产物在 `.build/probe/panel/`（**未入库**，`.build/` 被清理后失效）。本机：macOS 27.0.1，Xcode 27.1 / Swift 6.4。
 
 ## 0. 结论摘要

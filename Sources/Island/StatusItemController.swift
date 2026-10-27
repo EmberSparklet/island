@@ -299,6 +299,6 @@ final class StatusItemController {
     }
 
     private func log(_ message: String) {
-        FileHandle.standardError.write(Data("[island] \(message)\n".utf8))
+        IslandLog.write(message)
     }
 }

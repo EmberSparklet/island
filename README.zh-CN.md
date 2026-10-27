@@ -23,10 +23,12 @@
 - **你正看着的任务不打扰**：任务完成时如果它所在的 tab / 窗口就在最前面（tmux 当前 pane、cmux / Ghostty / Terminal / iTerm2 当前 tab、VS Code 当前终端、桌面 app 在前台），不弹出、不计数，列表里照样有它但没有红点；你自己切回一个未读任务的窗口后，几秒内红点和计数也会自动消掉
 - 「岛」式外观：面板贴着菜单栏下沿垂下，底部大圆角；标题行：自动弹出时是 `● N new`（没有未读是 `All caught up`）+ 快捷键；召唤时整行就是搜索框，右侧是 `N new` 小胶囊；每行是数字键帽 + agent 图标（未读在图标角上带红点）+ 标题 + `目录 • agent` + 右侧短时间（now / 3m / 2h）；选中行是半透明描边胶囊
 - 用快捷键 / 菜单召唤时可以直接打字过滤任务，`↑↓` 选择、`↩` 打开、`⌘1–9` 直达、`⌘,` 打开设置、`esc` 或点别处关闭；任务完成自动弹出时不抢焦点，只能鼠标点
-- `Settings…` 分 `General`（快捷键）/ `Appearance`（主题、键盘提示）/ `Notifications`（弹出）/ `Agents` / `Updates` / `Feedback` 六个 tab
+- **在悬浮窗里向 chat 站点提问**：`Tab` 键在一个模式环里切换——悬浮窗以 `Settings…` → `Launcher` 里第一个勾选的行为落点——`↩` 打开站点并把问题填进输入框。只有勾了那一行的 `Automatic send` 开关才会替你发送（DeepSeek 要求问题不超过 800 字、且已登录）；整个功能可以用 `ISLAND_LAUNCHER=off` 关掉
+- `Settings…` 分 `General`（快捷键）/ `Appearance`（主题、键盘提示）/ `Notifications`（弹出）/ `Agents` / `Launcher` / `Updates` / `Feedback` 七个 tab
+- `Settings…` → `Launcher`：一行一个模式。拖动排序就是 `Tab` 键走的顺序，第一个勾选的行是悬浮窗的落点，没勾的行会被跳过。内置 DeepSeek（`q`）与 Kimi（`prefill_prompt`）。也可以自己加站点：填地址、承载问题的参数名（`q`、`prefill_prompt`……）以及想要开关的附加参数，名字自己起。`Search tasks` 是悬浮窗的任务过滤，始终可用
 - `Settings…` → `Feedback`：写几句话，用邮件发出、打开预填好的 GitHub issue，或者复制下来；会自动附上 island 与 macOS 版本
 - `Settings…` → `Agents` 列出 island 支持的每个 agent 及其场景（如 Claude Code 的终端 CLI / 编辑器扩展 / Claude app 内 / SDK，Codex 的桌面 app / 终端 CLI / `codex exec`），写明怎么检测、点击后会怎样；每个场景、每个 agent 都可以单独关掉，关掉的场景不计数、不弹出、不进列表
-- `Settings…` → `Appearance` 里可以关掉底部的键盘提示（`Show keyboard hints`）；可选主题：System（浅色 Sand / 深色 Lagoon）/ Lagoon / Coral / Sand / Midnight / Liquid Glass，立即生效。Liquid Glass 在 macOS 26 及以上调用系统的液态玻璃材质（四角圆角），更旧的系统回退成同色系的半透明面板
+- `Settings…` → `Appearance` 里可以关掉底部的键盘提示（`Show keyboard hints`）；可选主题：System（浅色 Sand / 深色 Lagoon）/ Lagoon / Coral / Sand / Midnight / Liquid Glass，立即生效。所有主题都画同一套毛玻璃材质；Liquid Glass 用自己偏冷的配色，并把四角都做成圆角
 - **界面中英双语**：默认跟随系统语言，也可以在 `Settings…` → `Appearance` 的 `Language` 里固定为中文或 `English`。切换后菜单栏与悬浮窗立即更新，设置窗口重开一次即变；本文其余部分沿用英文界面的名称
 - 悬浮窗不会出现在窗口切换器里
 - 菜单栏常驻一个 island 图标：一眼看出它在跑，可手动召唤、开关召唤快捷键、改快捷键、切换开机自启、退出
@@ -96,6 +98,8 @@ defaults delete com.commallama.island IslandHotkeyText
 defaults delete com.commallama.island IslandHotkeyEnabled
 ```
 
+modifier 可写 `cmd`/`command`/`⌘`、`ctrl`/`control`/`⌃`、`opt`/`option`/`alt`/`⌥`、`shift`/`⇧`；key 是 US 布局的单字符，或 `space` / `tab` / `return` / `escape`（这条语法只有写环境变量 / `defaults` 时才需要，应用内录制不涉及）。
+
 ## 配置
 
 时长通过环境变量，改完即生效，无需重新构建。
@@ -107,14 +111,22 @@ defaults delete com.commallama.island IslandHotkeyEnabled
 | `ISLAND_TASK_LIMIT` | `10` | 悬浮窗展示的任务条数 |
 | `ISLAND_AGENT_HOME` | `~` | 从哪个目录读各 agent 的会话数据（`~/.claude`、`~/.pi`、`~/.codex` 等） |
 
+```bash
+ISLAND_HOTKEY=cmd+shift+k ISLAND_OVERLAY_SECONDS=2 ./build/Island.app/Contents/MacOS/Island
+```
+
+配置值写错时不会崩：回落到默认值，并在 stderr 打一行 `warning`。想只检查配置解析结果：
+
+```bash
+./build/Island.app/Contents/MacOS/Island --print-config
+```
+
 看一下本机现在检测到哪些已完成 run（不会开窗，纯调试）：
 
 ```bash
 ./build/Island.app/Contents/MacOS/Island --scan-agents        # 每行带场景 id（如 claude-code.terminal），被关掉的标 (off)
 ./build/Island.app/Contents/MacOS/Island --reopen-plan <pid>   # 某个 agent 进程会被怎么跳回
 ```
-
-任务条数用 `ISLAND_TASK_LIMIT` 调，默认 10。
 
 ## 菜单栏
 
@@ -125,7 +137,7 @@ defaults delete com.commallama.island IslandHotkeyEnabled
 | `Summon overlay (⌃⌘,)` | 手动召唤一次（快捷键之外的备用入口） |
 | `Summon hotkey` | 召唤快捷键的 on / off 开关，勾选状态即真实状态 |
 | `hotkey ⌃⌘, · default` | 当前快捷键及其来源（应用内设置 / 环境变量 / 默认），关掉时显示 `hotkey off` |
-| `Settings…` | 分 tab：录制快捷键、开关、清空；选择悬浮窗主题；任务完成时是否弹出、停留几秒；按 agent / 场景开关检测；升级；反馈 |
+| `Settings…` | 分 tab：录制快捷键、开关、清空；选择悬浮窗主题；任务完成时是否弹出、停留几秒；按 agent / 场景开关检测；启动器模式环；升级；反馈 |
 | `Launch at login` | 开机自启开关，勾选状态即系统真实状态 |
 | `Quit island` | 退出 |
 
@@ -140,18 +152,6 @@ defaults delete com.commallama.island IslandHotkeyEnabled
 ```
 
 关闭自启后，也可以在「系统设置 → 通用 → 登录项」里确认。
-
-modifier 可写 `cmd`/`command`/`⌘`、`ctrl`/`control`/`⌃`、`opt`/`option`/`alt`/`⌥`、`shift`/`⇧`；key 是 US 布局的单字符，或 `space` / `tab` / `return` / `escape`（这条语法只有写环境变量 / `defaults` 时才需要，应用内录制不涉及）。
-
-```bash
-ISLAND_HOTKEY=cmd+shift+k ISLAND_OVERLAY_SECONDS=2 ./build/Island.app/Contents/MacOS/Island
-```
-
-配置值写错时不会崩：回落到默认值，并在 stderr 打一行 `warning`。想只检查配置解析结果：
-
-```bash
-./build/Island.app/Contents/MacOS/Island --print-config
-```
 
 ## 开发
 

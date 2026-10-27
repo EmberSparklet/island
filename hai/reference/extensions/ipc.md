@@ -2,7 +2,7 @@
 
 - 交付人：ipc-scout（只读调研员）
 - 日期：2026-10-18
-- 工作目录：`/Users/boss/code/z-island`
+- 工作目录：island 仓库根目录
 - 入库位置：`hai/reference/extensions/ipc.md`。原为只读调研交付稿，当时写在构建目录 `.build/plan/` 下（未入库）
 - 实验产物：`.build/probe/ipc/`（源码 + 二进制 + 原始日志）。**未入库**，`.build/` 被清理后失效
 - 复现全部实测：`bash .build/probe/ipc/run_all.sh 2>&1 | tee .build/probe/ipc/RESULTS.log`（需要未入库的探针源码）
@@ -457,7 +457,7 @@
 ```
 $ ./bin_uds_server run/a/island.sock &
 -- socket file while listening:
-srwxr-xr-x@ 1 boss  staff  0 … run/a/island.sock
+srwxr-xr-x@ 1 me    staff  0 … run/a/island.sock
 $ printf '{"v":1,"method":"notify","id":"nc-1"}\n' | nc -U run/a/island.sock
 {"v":1,"ok":true,"server":"island"}
 nc exit=0
@@ -582,7 +582,7 @@ lookup status=-2 answered_by=-      # 名字不可用了，且第二次注册没
 
 ```
 $ lsof -nP -iTCP:47778     # 设了 requiredLocalEndpoint(127.0.0.1)
-bin_nw_li 82337 boss    3u  IPv4 … TCP 127.0.0.1:47778 (LISTEN)
+bin_nw_li 82337 me      3u  IPv4 … TCP 127.0.0.1:47778 (LISTEN)
 $ printf 'hello\n' | nc -w 2 127.0.0.1 47778
 {"v":1,"ok":true}
 -- 不设 requiredLocalEndpoint:

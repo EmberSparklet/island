@@ -283,13 +283,15 @@ public enum Launcher {
         return result
     }
 
-    /// The long-form note Settings shows behind a mode's ⓘ button. Only the sites
-    /// measured by hand have one; about a mode the user added, island has nothing
-    /// truthful to say.
+    /// The long-form note Settings shows behind a mode's ⓘ button. Only the site
+    /// measured on that exact host has one; about a mode the user added, island
+    /// has nothing truthful to say — even when the mode reuses a built-in id.
     public static func detail(for target: LauncherTarget) -> String? {
         switch target.id {
-        case deepSeek.id: return L10n.current.text(.launcherDetailDeepSeek)
-        case kimi.id: return L10n.current.text(.launcherDetailKimi)
+        case deepSeek.id where target.baseURL.host == deepSeek.baseURL.host:
+            return L10n.current.text(.launcherDetailDeepSeek)
+        case kimi.id where target.baseURL.host == kimi.baseURL.host:
+            return L10n.current.text(.launcherDetailKimi)
         default: return nil
         }
     }

@@ -46,6 +46,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Before anything draws: settle the language every view will read.
+        installEditMenu()
         L10n.use(languageStore.load())
         reportConfiguration()
         // Before registering anything: a copy in /Applications takes over.
@@ -199,7 +200,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     }
                 },
                 log: { message in
-                    FileHandle.standardError.write(Data("[island] \(message)\n".utf8))
+                    IslandLog.write(message)
                 }
             )
         )
@@ -333,8 +334,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         reopenQueue.async {
             let action = executor.plan(for: task)
             executor.perform(action, for: task)
-            FileHandle.standardError.write(
-                Data("[island] selected \(task.title) -> \(action)\n".utf8))
+            IslandLog.write("selected \(task.title) -> \(action)")
         }
     }
 
@@ -561,9 +561,38 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         return "\(version.majorVersion).\(version.minorVersion).\(version.patchVersion)"
     }
 
-    /// Written to stderr, which is only visible when launch happens from a
-    /// terminal — the way the POC is meant to be run.
+    /// island is an accessory app (LSUIElement): it shows no menu bar, so it
+    /// never had a menu to carry the standard editing key equivalents. Without
+    /// them ⌘C, ⌘V, ⌘X, ⌘Z and ⌘A are dead in every text field. The menu stays
+    /// invisible; it only exists so the responder chain gets the command.
+    /// Titles are English on purpose: an accessory app never draws them.
+    private func installEditMenu() {
+        let main = NSMenu()
+        let editHolder = NSMenuItem()
+        main.addItem(editHolder)
+        let edit = NSMenu(title: "Edit")
+        editHolder.submenu = edit
+        let items: [(title: String, action: String, key: String)] = [
+            ("Undo", "undo:", "z"),
+            ("Redo", "redo:", "Z"),
+            ("Cut", "cut:", "x"),
+            ("Copy", "copy:", "c"),
+            ("Paste", "paste:", "v"),
+            ("Select All", "selectAll:", "a"),
+        ]
+        for item in items {
+            let menuItem = NSMenuItem(
+                title: item.title, action: NSSelectorFromString(item.action),
+                keyEquivalent: item.key)
+            menuItem.target = nil
+            edit.addItem(menuItem)
+        }
+        NSApp.mainMenu = main
+    }
+
+    /// Goes to stderr and to ~/Library/Logs/island.log, so a launchd-started
+    /// copy still leaves evidence (issue terminal-reopen-stops-working).
     private func log(_ message: String) {
-        FileHandle.standardError.write(Data("[island] \(message)\n".utf8))
+        IslandLog.write(message)
     }
 }

@@ -4,7 +4,7 @@ name: overlay-shadow-square-corners
 title: "悬浮窗阴影按窗口矩形绘制，底部圆角处露出直角黑线"
 status: solved
 created_ts: 2026-10-19T20:49:53+08:00
-updated_ts: 2026-10-19T20:52:17+08:00
+updated_ts: 2026-10-27T23:56:30+08:00
 ---
 
 > 总纲：[ISSUES.md](../ISSUES.md)
@@ -13,9 +13,9 @@ updated_ts: 2026-10-19T20:52:17+08:00
 
 用户报告：Liquid Glass 主题下用 `⌃⌘,` 召唤悬浮窗，**底部左右两个圆角位置露出直角黑线**（用户原话：「底部左右就是两个黑色线条直角」）。
 
-复现与定位（本机 macOS 27.0.1 / 5120×2880@2x，dev build `build/Island.app`，主题 `liquidGlass`）：
+复现与定位（本机 macOS 27.0.1、2x 屏，dev build `build/Island.app`，主题 `liquidGlass`）：
 
-1. 用户截图 `/Users/boss/.dsh/attachments/.../0b222d2b…`（1158×356@2x）像素测量：
+1. 用户提供的截图（1158×356@2x）像素测量：
    - 玻璃胶囊本身的四个角都是 26pt 圆弧（底左圆弧拟合圆心 (120,238)、半径 52px，与 `CapsuleShapeView.bottomRadius = 26` 一致）；
    - 另有一条**深色 1px 线**贴着窗口 frame 矩形：左边缘 x=67–68、下边缘 y=291–292、上边缘 y=23，底左角在 (68,290) 处**直角相交**（顶左角则是圆弧）。frame 矩形 = 1041×269px = 520×134pt，与 `OverlayPanel` 的 frame 完全一致。
 2. 探针复现（scratch worktree `/tmp/island-probe-overlay`，只加钩子，不进 master）：调用真实 `showOverlay(interactive: true)` 后整屏截图，在 frame 左边缘 x=2084 处同样量到 1–2 个近黑像素（L≈2，背景 L≈17–20）。
@@ -43,8 +43,6 @@ updated_ts: 2026-10-19T20:52:17+08:00
 
 - 全程在独立 worktree（`../.worktree/<repo>-<slug>`）中完成，合回 master 前 `make verify` 全过，流程见 AGENTS.md / Workflow / Worktree 与 Ship
 - 遗留：若需要投影，应自绘圆角阴影（窗口外扩 + 内容内缩），属另一次改动
-
-- 全程在独立 worktree（`../.worktree/<repo>-<slug>`）中完成，合回 master 前 `make verify` 全过，流程见 AGENTS.md / Workflow / Worktree 与 Ship
 
 # History
 

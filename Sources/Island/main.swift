@@ -9,8 +9,7 @@ if Bundle.main.bundleIdentifier != LegacySettings.bundleID,
 {
     let copied = LegacySettings.migrate(from: legacy, to: .standard)
     if !copied.isEmpty {
-        FileHandle.standardError.write(
-            Data("[island] migrated settings from \(LegacySettings.bundleID): \(copied)\n".utf8))
+        IslandLog.write("migrated settings from \(LegacySettings.bundleID): \(copied)")
     }
 }
 

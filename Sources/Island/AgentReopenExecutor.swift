@@ -95,20 +95,37 @@ final class AgentReopenExecutor: Sendable {
 
     /// Selects the pane, then switches a tmux client to it — `select-window`
     /// alone changes the session's current window but leaves every client on
-    /// whatever session it was showing.
+    /// whatever session it was showing. Any non-zero status means the jump is not
+    /// trustworthy: WARN and bring the terminal app forward instead of logging
+    /// success (issue terminal-reopen-stops-working).
     private func focusTmux(windowTarget: String, paneTarget: String, task: AgentTask) {
-        _ = run(tmuxArguments(["select-window", "-t", windowTarget]))
-        _ = run(tmuxArguments(["select-pane", "-t", paneTarget]))
+        var steps = [
+            runStep("select-window", tmuxArguments(["select-window", "-t", windowTarget])),
+            runStep("select-pane", tmuxArguments(["select-pane", "-t", paneTarget])),
+        ]
         let clients = TmuxClient.parse(
             run(tmuxArguments(["list-clients", "-F", Self.clientFormat])) ?? "")
-        if let client = TmuxClient.pick(clients, forPane: paneTarget) {
-            _ = run(tmuxArguments(["switch-client", "-c", client.tty, "-t", paneTarget]))
-            log("tmux client \(client.tty) -> \(paneTarget)")
-            if focusTerminal(TerminalLeaf(pid: client.pid, tty: client.tty), cwd: task.cwd) {
-                return
+        guard let client = TmuxClient.pick(clients, forPane: paneTarget) else {
+            if let reason = TmuxFocus.fallbackReason(steps) {
+                log("WARN \(reason); no attached tmux client, activating the terminal app")
+            } else {
+                log("tmux -> \(paneTarget) (no attached client)")
             }
-        } else {
-            log("tmux -> \(paneTarget) (no attached client)")
+            activateAnyTerminal()
+            return
+        }
+        steps.append(
+            runStep(
+                "switch-client",
+                tmuxArguments(["switch-client", "-c", client.tty, "-t", paneTarget])))
+        if let reason = TmuxFocus.fallbackReason(steps) {
+            log("WARN \(reason); activating the terminal app instead")
+            activateAnyTerminal()
+            return
+        }
+        log("tmux client \(client.tty) -> \(paneTarget)")
+        if focusTerminal(TerminalLeaf(pid: client.pid, tty: client.tty), cwd: task.cwd) {
+            return
         }
         activateAnyTerminal()
     }
@@ -226,7 +243,14 @@ final class AgentReopenExecutor: Sendable {
         Subprocess.run(arguments)
     }
 
+    /// Runs one tmux command and keeps its exit status for `TmuxFocus`.
+    private func runStep(_ command: String, _ arguments: [String]) -> TmuxFocus.Step {
+        // A command that cannot start at all (-1) is a failure too.
+        let status = Subprocess.runWithStatus(arguments)?.status ?? -1
+        return TmuxFocus.Step(command: command, status: status)
+    }
+
     func log(_ message: String) {
-        FileHandle.standardError.write(Data("[island] \(message)\n".utf8))
+        IslandLog.write(message)
     }
 }

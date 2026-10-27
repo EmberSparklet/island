@@ -15,7 +15,7 @@
 3. 主通道 = **Unix domain socket + 行分隔 JSON**，路径 `~/Library/Application Support/island/ipc/island.sock`，目录 0700、socket 0600。`[可得]` 高（`.build/probe/ipc/RESULTS.log:21-30,75-98`）
 4. **进程内 dylib 插件方案否决**：发布版是 Developer ID + hardened runtime，dlopen 异 Team ID 或 ad-hoc 的 dylib 必败。开发机是 ad-hoc 反而能加载，是"开发通过、发布失败"的陷阱。`[可得]` 高（`.build/probe/plugin/libval/`、`evidence-codesign.txt`）
 5. 插件分两层：**声明式 manifest（无代码）** + **独立进程（回连同一 socket）**，共用一套发现/启用/生命周期。`[推断:]` 中（依据：`plugin.md` §2 的淘汰结果）
-6. 第一个真实客户端已经存在：用户的 DSH 插件 `dsh-system-notify`，desktop 与 web 两个 profile 都已链接（`~/.dsh/profiles/{desktop,web}/node_modules/dsh-system-notify`），现在用 `execFile("terminal-notifier", …)`（`lib/index.js:159`）。改成调 island CLI（或直连 socket）即可端到端验证。`[可得]` 高
+6. 第一个真实客户端已经存在：用户的 DSH 插件 `dsh-system-notify`，desktop 与 web 两个 profile 都已链接（各 profile 的 `node_modules/dsh-system-notify`），现在用 `execFile("terminal-notifier", …)`（`lib/index.js:159`）。改成调 island CLI（或直连 socket）即可端到端验证。`[可得]` 高
 7. 三条需求**都没有 `hai/PLAN.md` 的 scope 依据**（`hai/PLAN.md:22-34` 只覆盖"检测本机 agent 完成任务 + 回到任务"）。改 PLAN 只有人能改，属 Ask first。这些需求属于 PLAN 未覆盖的新需求。
 
 ---

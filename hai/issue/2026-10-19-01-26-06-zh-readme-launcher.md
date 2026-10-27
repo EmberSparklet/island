@@ -2,9 +2,9 @@
 type: docs
 name: zh-readme-launcher
 title: "README.zh-CN 缺启动器一节、tab 数仍是六个"
-status: new
+status: solved
 created_ts: 2026-10-19T01:26:06+08:00
-updated_ts: 2026-10-19T01:26:06+08:00
+updated_ts: 2026-10-27T23:55:17+08:00
 ---
 
 > 总纲：[ISSUES.md](../ISSUES.md)
@@ -29,3 +29,7 @@ P3c 的 issue History 与 P3d 的 History 都记了这条缺口，但当时都�
 - 只有真的动内容时才改，不做纯措辞润色
 
 # History
+
+## 2026-10-27T23:55:17+08:00: new -> solved
+
+本轮文档整理一并补齐：`README.zh-CN.md` tab 数改为七个并含 `Launcher`，功能列表补「从悬浮窗向 chat 站点提问」与 `Settings…` → `Launcher` 两条，菜单表格的 `Settings…` 一行加上启动器模式环，与英文 `README.md` 信息对等。

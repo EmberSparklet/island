@@ -68,9 +68,17 @@ final class IPCServer: @unchecked Sendable {
         } catch {
             return .failed("cannot create \(directory.path): \(error.localizedDescription)")
         }
-        // The attributes above are only applied when the directory is created.
-        try? FileManager.default.setAttributes(
-            [.posixPermissions: 0o700], ofItemAtPath: directory.path)
+        // The attributes above are only applied when the directory is created,
+        // so tighten one that already exists too. P0 has no token, so these
+        // permissions are the only access control: when they cannot be set the
+        // inbound channel stays closed instead of listening for any local user.
+        do {
+            try FileManager.default.setAttributes(
+                [.posixPermissions: 0o700], ofItemAtPath: directory.path)
+        } catch {
+            return .failed(
+                "cannot tighten \(directory.path) to 0700: \(error.localizedDescription)")
+        }
 
         let fd = socket(AF_UNIX, SOCK_STREAM, 0)
         guard fd >= 0 else { return .failed("socket() failed: \(errno)") }
@@ -97,7 +105,14 @@ final class IPCServer: @unchecked Sendable {
 
     private func startListening(on fd: Int32, path: String) -> StartResult {
         // bind() creates the file with umask-derived permissions; tighten it.
-        chmod(path, 0o600)
+        // A socket left at the umask is connectable by other local users, so a
+        // failure here also closes the inbound channel (same reason as above).
+        guard chmod(path, 0o600) == 0 else {
+            let failure = errno
+            close(fd)
+            unlink(path)
+            return .failed("chmod(\(path)) to 0600 failed: \(failure)")
+        }
         guard listen(fd, 16) == 0 else {
             let failure = errno
             close(fd)

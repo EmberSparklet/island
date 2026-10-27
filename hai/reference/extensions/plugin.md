@@ -1,6 +1,6 @@
 # island 插件机制设计与插件规范草案（task-2）
 
-调研对象：`/Users/boss/code/z-island`（lbyxiafei/island），只读。本文原为只读调研交付稿，当时写在构建目录 `.build/plan/` 下（未入库）。
+调研对象：island 仓库（lbyxiafei/island），只读。本文原为只读调研交付稿，当时写在构建目录 `.build/plan/` 下（未入库）。
 
 探针产物在 `.build/probe/plugin/`（**未入库**，`.build/` 被清理后失效）。结论引用的签名与加载实验结果已抄录在本文 §1.1 与 §2.1。
 

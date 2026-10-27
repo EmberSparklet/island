@@ -189,3 +189,37 @@ public enum AgentReopen {
         }
     }
 }
+
+/// The tmux commands island runs to bring a pane forward, and when to stop
+/// trusting them. select-window / select-pane can fail on a stale target while
+/// the later commands "succeed", and a failed switch-client leaves the client on
+/// whatever session it was showing — so a non-zero status anywhere means
+/// "degrade to activating the terminal app" instead of claiming the jump worked
+/// (issue terminal-reopen-stops-working).
+public enum TmuxFocus {
+    /// One tmux subcommand island ran: the command name (for the WARN line) and
+    /// its exit status.
+    public struct Step: Equatable, Sendable {
+        public let command: String
+        public let status: Int32
+
+        public init(command: String, status: Int32) {
+            self.command = command
+            self.status = status
+        }
+
+        public var succeeded: Bool { status == 0 }
+    }
+
+    /// The first step that did not exit 0, or nil when every step succeeded.
+    public static func firstFailure(in steps: [Step]) -> Step? {
+        steps.first { !$0.succeeded }
+    }
+
+    /// Why island must fall back to activateAnyTerminal(), or nil when the tmux
+    /// commands did their job. The text goes into one WARN log line.
+    public static func fallbackReason(_ steps: [Step]) -> String? {
+        guard let step = firstFailure(in: steps) else { return nil }
+        return "tmux \(step.command) failed (status \(step.status))"
+    }
+}

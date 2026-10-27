@@ -139,6 +139,9 @@ public enum TerminalTabFocus: Equatable, Sendable {
         case vscodeBundleID:
             return .vscode(pids: chain)
         default:
+            // Warp (and any other host with no scripting handle on its
+            // terminals) can only be activated, not switched to the task's
+            // tab. That is the deliberate degradation here, not a missing case.
             return .none
         }
     }

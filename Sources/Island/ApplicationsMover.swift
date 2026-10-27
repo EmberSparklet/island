@@ -26,7 +26,7 @@ enum ApplicationsMover {
 
         let destination = MoveToApplications.destination(forBundlePath: source)
         do {
-            try copy(from: source, to: destination)
+            try copy(from: source, to: destination, log: log)
         } catch {
             log("move to Applications failed: \(error.localizedDescription)")
             let failure = NSAlert(error: error)
@@ -51,7 +51,9 @@ enum ApplicationsMover {
 
     /// Replaces any older copy (to the Trash, so it is recoverable), then
     /// strips the quarantine flag so the copy is not translocated in turn.
-    private static func copy(from source: String, to destination: String) throws {
+    private static func copy(
+        from source: String, to destination: String, log: (String) -> Void
+    ) throws {
         let files = FileManager.default
         let target = URL(fileURLWithPath: destination)
         if files.fileExists(atPath: destination) {
@@ -59,6 +61,13 @@ enum ApplicationsMover {
         }
         try files.copyItem(at: URL(fileURLWithPath: source), to: target)
         let clear = MoveToApplications.clearQuarantineCommand(appPath: destination)
-        _ = Subprocess.runWithStatus([clear.executable] + clear.arguments)
+        // The copy still runs without this; only a quarantined copy gets
+        // translocated again, so log the dropped result instead of failing.
+        let cleared = Subprocess.runWithStatus([clear.executable] + clear.arguments)
+        if cleared == nil || cleared?.status != 0 {
+            log(
+                "could not clear the quarantine flag on \(destination): "
+                    + (cleared?.error ?? "\(clear.executable) could not start"))
+        }
     }
 }

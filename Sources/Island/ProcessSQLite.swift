@@ -15,17 +15,32 @@ struct ProcessSQLiteQuerying: SQLiteQuerying {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: executable)
         process.arguments = ["-json", database.path, sql]
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        process.standardError = FileHandle.nullDevice
+        let output = Pipe()
+        let diagnostics = Pipe()
+        process.standardOutput = output
+        process.standardError = diagnostics
         do {
             try process.run()
         } catch {
+            log("cannot run \(executable): \(error.localizedDescription)")
             return nil
         }
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        // stderr stays tiny (sqlite3 prints one error and exits), so draining
+        // stdout first cannot deadlock on a full stderr pipe.
+        let data = output.fileHandleForReading.readDataToEndOfFile()
+        let errorData = diagnostics.fileHandleForReading.readDataToEndOfFile()
         process.waitUntilExit()
-        guard process.terminationStatus == 0 else { return nil }
+        guard process.terminationStatus == 0 else {
+            let reason = String(data: errorData, encoding: .utf8) ?? ""
+            log(
+                "sqlite3 exited \(process.terminationStatus) on \(database.lastPathComponent):"
+                    + " \(reason.trimmingCharacters(in: .whitespacesAndNewlines))")
+            return nil
+        }
         return String(data: data, encoding: .utf8)
+    }
+
+    private func log(_ message: String) {
+        IslandLog.write(message)
     }
 }

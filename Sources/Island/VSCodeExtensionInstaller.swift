@@ -23,14 +23,14 @@ enum VSCodeExtensionInstaller {
                 VSCodeExtension.installedVersion(in: $0, id: VSCodeExtension.id)
             }
             guard installed != version else { return }
-            _ = Subprocess.run([cli, "--install-extension", vsix.path, "--force"])
+            if Subprocess.run([cli, "--install-extension", vsix.path, "--force"]) == nil {
+                IslandLog.write("could not run the VS Code CLI at \(cli)")
+            }
             let now = (try? Data(contentsOf: registry)).flatMap {
                 VSCodeExtension.installedVersion(in: $0, id: VSCodeExtension.id)
             }
             let result = now == version ? "installed" : "failed to install"
-            FileHandle.standardError.write(
-                Data("[island] \(result) VS Code extension \(VSCodeExtension.id)@\(version)\n".utf8)
-            )
+            IslandLog.write("\(result) VS Code extension \(VSCodeExtension.id)@\(version)")
         }
     }
 }
